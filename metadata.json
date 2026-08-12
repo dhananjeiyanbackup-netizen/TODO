@@ -1,0 +1,6 @@
+{
+  "name": "Todo & Work Management Dashboard",
+  "description": "Comprehensive productivity, department administration, follow-up, and innovation management system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

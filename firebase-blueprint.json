@@ -1,0 +1,20 @@
+{
+  "entities": {
+    "Task": {
+      "collectionName": "tasks",
+      "fields": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "createdDate": { "type": "string" },
+        "startDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "isArchived": { "type": "boolean" }
+      }
+    }
+  }
+}

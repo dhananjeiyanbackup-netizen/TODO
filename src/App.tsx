@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Task, ViewMode, MainCategory, TaskStatus } from './types';
+import { Task, ViewMode, MainCategory, TaskStatus, Attachment } from './types';
 import { INITIAL_TASKS } from './data/initialTasks';
 import { 
   syncTaskStatusesWithDates, 
@@ -272,6 +272,59 @@ export default function App() {
     }
   };
 
+  const handleAddAttachment = async (taskId: string, attachment: Attachment) => {
+    const existing = tasks.find(t => t.id === taskId);
+    if (!existing) return;
+
+    const currentAttachments = existing.attachments || [];
+    const updated: Task = {
+      ...existing,
+      attachments: [...currentAttachments, attachment],
+      activityLogs: [
+        {
+          id: `act_${Date.now()}`,
+          action: 'Updated',
+          description: `Attached project document "${attachment.name}" (${attachment.size}).`,
+          timestamp: new Date().toLocaleString()
+        },
+        ...(existing.activityLogs || [])
+      ]
+    };
+
+    await saveTaskToDb(updated);
+
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask(updated);
+    }
+  };
+
+  const handleDeleteAttachment = async (taskId: string, attachmentId: string) => {
+    const existing = tasks.find(t => t.id === taskId);
+    if (!existing) return;
+
+    const currentAttachments = existing.attachments || [];
+    const removedAtt = currentAttachments.find(a => a.id === attachmentId);
+    const updated: Task = {
+      ...existing,
+      attachments: currentAttachments.filter(a => a.id !== attachmentId),
+      activityLogs: [
+        {
+          id: `act_${Date.now()}`,
+          action: 'Updated',
+          description: `Removed document attachment "${removedAtt?.name || attachmentId}".`,
+          timestamp: new Date().toLocaleString()
+        },
+        ...(existing.activityLogs || [])
+      ]
+    };
+
+    await saveTaskToDb(updated);
+
+    if (selectedTask && selectedTask.id === taskId) {
+      setSelectedTask(updated);
+    }
+  };
+
   const handleResetSampleData = async () => {
     // Clear current tasks and load sample dataset
     await clearAllTasksFromDb(tasks);
@@ -474,6 +527,8 @@ export default function App() {
         onUpdateStatus={handleUpdateStatus}
         onAddNote={handleAddNote}
         onAddFollowUpLog={handleAddFollowUpLog}
+        onAddAttachment={handleAddAttachment}
+        onDeleteAttachment={handleDeleteAttachment}
       />
 
       {/* Notification Drawer */}

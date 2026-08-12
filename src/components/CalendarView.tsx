@@ -83,12 +83,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const calendarDays: (string | null)[] = [];
-  for (let i = 0; i < firstDayOfMonth; i++) {
-    calendarDays.push(null);
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    calendarDays.push(dateStr);
+  if (viewType === 'MONTH') {
+    for (let i = 0; i < firstDayOfMonth; i++) {
+      calendarDays.push(null);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      calendarDays.push(dateStr);
+    }
+  } else {
+    // Week View: 7 days starting from Sunday
+    const startOfWeek = new Date(currentDate);
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(startOfWeek);
+      dayDate.setDate(startOfWeek.getDate() + i);
+      const dateStr = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+      calendarDays.push(dateStr);
+    }
   }
 
   // Helper to filter tasks for a given date

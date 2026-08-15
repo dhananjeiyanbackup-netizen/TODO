@@ -32,7 +32,9 @@ import {
   ExternalLink,
   Sparkles,
   Tag,
-  AlertCircle
+  AlertCircle,
+  Briefcase,
+  CheckSquare
 } from 'lucide-react';
 import { Task, TaskStatus, Attachment } from '../types';
 import { 
@@ -378,6 +380,89 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     <div><span className="text-emerald-700 dark:text-emerald-400">Result:</span> <strong className="text-emerald-950 dark:text-emerald-100">{task.innovation.result}</strong></div>
                     <div><span className="text-emerald-700 dark:text-emerald-400">Certificate:</span> <strong className="text-emerald-950 dark:text-emerald-100">{task.innovation.certificateStatus}</strong></div>
                     <div><span className="text-emerald-700 dark:text-emerald-400">Prize:</span> <strong className="text-emerald-950 dark:text-emerald-100">{task.innovation.prize || 'N/A'}</strong></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Placement Info Card if applicable */}
+              {task.placement && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2">
+                  <h4 className="font-bold text-blue-900 dark:text-blue-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="w-4 h-4 text-blue-600" />
+                    <span>Placement & Drive Details</span>
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                    <div><span className="text-blue-700 dark:text-blue-400">Company:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.companyName}</strong></div>
+                    <div><span className="text-blue-700 dark:text-blue-400">HR Contact:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.hrName || 'N/A'}</strong></div>
+                    <div><span className="text-blue-700 dark:text-blue-400">Activity Type:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.placementType}</strong></div>
+                    <div><span className="text-blue-700 dark:text-blue-400">CTC Package:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.ctcPackage || 'N/A'}</strong></div>
+                    <div><span className="text-blue-700 dark:text-blue-400">Eligible Batches:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.eligibleBranches || 'All'}</strong></div>
+                    <div><span className="text-blue-700 dark:text-blue-400">Drive Date:</span> <strong className="text-blue-950 dark:text-blue-100">{task.placement.driveDate || 'N/A'}</strong></div>
+                    {task.placement.contactPhone && <div><span className="text-blue-700 dark:text-blue-400 font-semibold">HR Phone:</span> <span className="font-mono text-blue-900 dark:text-blue-200">{task.placement.contactPhone}</span></div>}
+                    {task.placement.contactEmail && <div><span className="text-blue-700 dark:text-blue-400 font-semibold">HR Email:</span> <span className="font-mono text-blue-900 dark:text-blue-200">{task.placement.contactEmail}</span></div>}
+                    {task.placement.studentsShortlisted && <div><span className="text-blue-700 dark:text-blue-400 font-semibold">Shortlisted:</span> <span className="font-bold text-emerald-600 dark:text-emerald-400">{task.placement.studentsShortlisted}</span></div>}
+                  </div>
+                  {task.placement.remarks && (
+                    <div className="pt-1 text-xs text-blue-900 dark:text-blue-200">
+                      <span className="font-semibold text-blue-700 dark:text-blue-400">Drive Status / Remarks: </span>
+                      {task.placement.remarks}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Google Workspace Auto-Sync Status Card */}
+              {(task.googleSyncEmail || task.googleCalendarEventId || task.googleTaskId || task.googleCalendarLink) && (
+                <div className="p-4 bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-purple-50/70 dark:from-slate-800/80 dark:via-indigo-950/30 dark:to-slate-800/80 border border-indigo-200 dark:border-indigo-800/60 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-indigo-950 dark:text-indigo-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>Google Workspace Auto-Sync</span>
+                      <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                        Fixed & Synced
+                      </span>
+                    </h4>
+
+                    {task.googleSyncEmail && (
+                      <div className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 font-mono bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                        <Mail className="w-3 h-3 text-indigo-500" />
+                        <span>{task.googleSyncEmail}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {task.googleCalendarEventId && (
+                      <div className="flex items-center justify-between p-2 bg-white/80 dark:bg-slate-800/80 rounded-lg border border-slate-200/80 dark:border-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4 text-blue-500" />
+                          <span className="font-medium text-slate-800 dark:text-slate-200">Google Calendar Event</span>
+                        </div>
+                        {task.googleCalendarLink ? (
+                          <a
+                            href={task.googleCalendarLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <span>Open</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-emerald-600 font-semibold">Synced</span>
+                        )}
+                      </div>
+                    )}
+
+                    {task.googleTaskId && (
+                      <div className="flex items-center justify-between p-2 bg-white/80 dark:bg-slate-800/80 rounded-lg border border-slate-200/80 dark:border-slate-700">
+                        <div className="flex items-center gap-1.5">
+                          <CheckSquare className="w-4 h-4 text-emerald-500" />
+                          <span className="font-medium text-slate-800 dark:text-slate-200">Google Tasks Item</span>
+                        </div>
+                        <span className="text-[11px] text-emerald-600 font-semibold">Synced</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -10,12 +10,14 @@ import {
   AlertCircle, 
   MoreVertical,
   Paperclip,
-  RotateCw
+  RotateCw,
+  Briefcase
 } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
 import { 
   getCategoryBadgeStyle, 
   getPriorityBadgeStyle, 
+  getPriorityCardStyle,
   getStatusBadgeStyle,
   getTodayFormatted 
 } from '../utils/taskUtils';
@@ -49,13 +51,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   return (
     <div 
-      className={`group relative bg-white dark:bg-slate-800/90 border rounded-2xl transition-all duration-200 hover:shadow-md cursor-pointer ${
-        task.priority === 'CRITICAL' 
-          ? 'border-l-4 border-l-red-500 border-slate-200 dark:border-slate-700' 
-          : isOverdue 
-            ? 'border-l-4 border-l-orange-500 border-slate-200 dark:border-slate-700'
-            : 'border-slate-200 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600'
-      } ${compact ? 'p-3' : 'p-4 sm:p-5'}`}
+      className={`group relative rounded-2xl transition-all duration-200 hover:shadow-md cursor-pointer ${getPriorityCardStyle(task.priority)} ${compact ? 'p-3' : 'p-4 sm:p-5'}`}
       onClick={() => onSelectTask(task)}
     >
       {/* Top Header Row */}
@@ -119,6 +115,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </span>
           <span className="px-1.5 py-0.5 bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 rounded-md font-bold text-[10px]">
             {task.innovation.level || 'Innovation'}
+          </span>
+        </div>
+      )}
+
+      {/* Placement snippet if present */}
+      {task.placement && task.placement.companyName && (
+        <div className="mb-2 p-2 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/50 rounded-xl text-xs text-blue-900 dark:text-blue-200 flex flex-wrap items-center justify-between gap-1">
+          <span className="font-semibold flex items-center gap-1 truncate">
+            <Briefcase className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="truncate">{task.placement.companyName} {task.placement.hrName ? `(${task.placement.hrName})` : ''}</span>
+          </span>
+          <span className="px-1.5 py-0.5 bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-md font-bold text-[10px] shrink-0">
+            {task.placement.placementType || 'Placement'} {task.placement.ctcPackage ? `• ${task.placement.ctcPackage}` : ''}
           </span>
         </div>
       )}

@@ -9,10 +9,12 @@ import {
   Plus, 
   MessageSquare, 
   RotateCcw,
-  AlertCircle
+  AlertCircle,
+  Briefcase,
+  Building2
 } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
-import { getTodayFormatted, getTomorrowFormatted } from '../utils/taskUtils';
+import { getTodayFormatted, getTomorrowFormatted, getPriorityBadgeStyle } from '../utils/taskUtils';
 
 interface FollowUpViewProps {
   tasks?: Task[];
@@ -41,10 +43,26 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
   const upcoming = followUpTasks.filter(t => t.contact?.nextFollowUpDate && t.contact.nextFollowUpDate > tomorrow && t.status !== 'COMPLETED');
   const completed = followUpTasks.filter(t => t.status === 'COMPLETED');
 
+  // Filter state
+  const [filterCategory, setFilterCategory] = useState<'ALL' | 'PLACEMENT' | 'FACULTY' | 'STUDENT'>('ALL');
+
   // Interactive Reschedule or Log Contact state
   const [activeRescheduleId, setActiveRescheduleId] = useState<string | null>(null);
   const [newFollowUpDate, setNewFollowUpDate] = useState<string>(today);
   const [logNoteText, setLogNoteText] = useState<string>('');
+
+  const filteredFollowUps = followUpTasks.filter(t => {
+    if (filterCategory === 'PLACEMENT') {
+      return t.subcategory?.includes('Placement') || t.subcategory?.includes('Company') || !!t.placement || t.contact?.departmentOrOrg?.toLowerCase().includes('hr') || t.contact?.departmentOrOrg?.toLowerCase().includes('company');
+    }
+    if (filterCategory === 'FACULTY') {
+      return t.subcategory === 'Faculty Follow-up' || t.contact?.personName?.includes('Dr.') || t.contact?.personName?.includes('Prof.') || t.contact?.personName?.includes('HOD') || t.contact?.departmentOrOrg?.includes('Dept');
+    }
+    if (filterCategory === 'STUDENT') {
+      return t.subcategory === 'Student Mentoring' || t.subcategory === 'Student Activities' || t.contact?.departmentOrOrg?.toLowerCase().includes('student');
+    }
+    return true;
+  });
 
   const handleExecuteFollowUp = (task: Task) => {
     const note = logNoteText.trim() || 'Contacted person and logged progress.';
@@ -112,10 +130,57 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
 
       {/* Follow-up Master Table (Section 9) */}
       <section className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-5 sm:p-6 shadow-xs">
-        <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-          <Phone className="w-5 h-5 text-purple-600" />
-          Active Follow-up Log Table
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Phone className="w-5 h-5 text-purple-600" />
+            Active Follow-up Log Table
+          </h2>
+
+          {/* Quick Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <button
+              onClick={() => setFilterCategory('ALL')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                filterCategory === 'ALL'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              All ({followUpTasks.length})
+            </button>
+            <button
+              onClick={() => setFilterCategory('PLACEMENT')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                filterCategory === 'PLACEMENT'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              <Briefcase className="w-3.5 h-3.5" />
+              <span>Placement & HR</span>
+            </button>
+            <button
+              onClick={() => setFilterCategory('FACULTY')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                filterCategory === 'FACULTY'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              Faculty / HOD
+            </button>
+            <button
+              onClick={() => setFilterCategory('STUDENT')}
+              className={`px-3 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                filterCategory === 'STUDENT'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+              }`}
+            >
+              Student Mentoring
+            </button>
+          </div>
+        </div>
 
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
@@ -123,6 +188,7 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
               <tr>
                 <th className="py-3 px-3">Person & Dept</th>
                 <th className="py-3 px-3">Related Task</th>
+                <th className="py-3 px-3">Priority</th>
                 <th className="py-3 px-3">Last Contact</th>
                 <th className="py-3 px-3">Next Follow-up</th>
                 <th className="py-3 px-3">Status</th>
@@ -131,19 +197,22 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {followUpTasks.map((task) => {
+              {filteredFollowUps.map((task) => {
                 const c = task.contact;
+                const p = task.placement;
                 const isExpanded = activeRescheduleId === task.id;
 
                 return (
                   <React.Fragment key={task.id}>
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="py-3 px-3">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
-                          {c?.personName || 'N/A'}
+                        <div className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                          {p && <Briefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                          <span>{c?.personName || p?.hrName || 'N/A'}</span>
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          {c?.departmentOrOrg} • {c?.contactType}
+                          {p?.companyName || c?.departmentOrOrg} • {p?.placementType || c?.contactType}
+                          {p?.ctcPackage && <span className="ml-1 text-emerald-600 font-bold">({p.ctcPackage})</span>}
                         </div>
                       </td>
 
@@ -152,6 +221,12 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
                         className="py-3 px-3 font-semibold text-slate-800 dark:text-slate-200 hover:text-purple-600 cursor-pointer max-w-[200px] truncate"
                       >
                         {task.title}
+                      </td>
+
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-extrabold ${getPriorityBadgeStyle(task.priority)}`}>
+                          {task.priority}
+                        </span>
                       </td>
 
                       <td className="py-3 px-3 text-slate-600 dark:text-slate-400">
@@ -202,7 +277,7 @@ export const FollowUpView: React.FC<FollowUpViewProps> = ({
                     {/* Reschedule / Log Inline Panel */}
                     {isExpanded && (
                       <tr className="bg-purple-50/60 dark:bg-purple-950/30">
-                        <td colSpan={7} className="p-4">
+                        <td colSpan={8} className="p-4">
                           <div className="space-y-2 max-w-2xl">
                             <h4 className="font-bold text-purple-900 dark:text-purple-200 text-xs">
                               Log Contact Result & Reschedule Next Follow-up for: {c?.personName || task.title}

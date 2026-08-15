@@ -19,6 +19,12 @@ export type SubCategory =
   | 'CIAT / Internal Assessment'
   | 'Examination'
   | 'Student Mentoring'
+  | 'Placement'
+  | 'Placement Drive'
+  | 'Placement Cell'
+  | 'Placement Training'
+  | 'Placement Follow-up'
+  | 'Company HR Follow-up'
   | 'Faculty Follow-up'
   | 'Department Meetings'
   | 'NBA'
@@ -100,6 +106,21 @@ export interface InnovationDetails {
   remarks?: string;
 }
 
+export interface PlacementDetails {
+  companyName?: string;
+  hrName?: string;
+  designation?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  placementType?: 'On-Campus Drive' | 'Off-Campus Drive' | 'Internship' | 'Industrial Visit' | 'Placement Training' | 'MOU Signing' | 'Job Offer Follow-up';
+  ctcPackage?: string; // e.g. "6.5 LPA"
+  eligibleBranches?: string; // e.g. "CSE, ECE, IT (2026 Batch)"
+  driveDate?: string;
+  studentsShortlisted?: string; // e.g. "12 Students"
+  placementStatus?: 'Upcoming Drive' | 'Interview Scheduled' | 'Awaiting Offer Letters' | 'Completed' | 'Follow-up Pending';
+  remarks?: string;
+}
+
 export interface ContactDetails {
   personName?: string;
   departmentOrOrg?: string;
@@ -134,6 +155,9 @@ export interface Task {
   followUpDate?: string;
   contact?: ContactDetails;
   
+  // Placement
+  placement?: PlacementDetails;
+
   // Innovation Hub
   innovation?: InnovationDetails;
   
@@ -145,6 +169,10 @@ export interface Task {
   activityLogs: ActivityLog[];
   recurrence?: RecurrencePattern;
   isArchived?: boolean;
+  googleCalendarEventId?: string;
+  googleCalendarLink?: string;
+  googleTaskId?: string;
+  googleSyncEmail?: string;
 }
 
 export interface TaskFilterOptions {

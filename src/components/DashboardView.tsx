@@ -18,7 +18,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Task, ViewMode, MainCategory, TaskStatus } from '../types';
-import { calculateDashboardStats, getTodayFormatted, sortTasksByPriorityAndDate } from '../utils/taskUtils';
+import { calculateDashboardStats, getTodayFormatted, sortTasksByPriorityAndDate, getPriorityBadgeStyle } from '../utils/taskUtils';
 import { TaskCard } from './TaskCard';
 
 interface DashboardViewProps {
@@ -388,9 +388,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </span>
                   </td>
                   <td className="py-2.5 px-3">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                      task.priority === 'CRITICAL' ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] uppercase font-extrabold ${getPriorityBadgeStyle(task.priority)}`}>
                       {task.priority}
                     </span>
                   </td>

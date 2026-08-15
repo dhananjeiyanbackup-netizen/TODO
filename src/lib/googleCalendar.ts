@@ -6,12 +6,13 @@ import {
   User 
 } from 'firebase/auth';
 import { app } from './firebase';
+import { WORKSPACE_SCOPES, setCachedWorkspaceToken } from './googleTasks';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
-provider.addScope(CALENDAR_SCOPE);
+WORKSPACE_SCOPES.forEach(scope => provider.addScope(scope));
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;
@@ -72,6 +73,7 @@ export const googleSignInForCalendar = async (): Promise<{ user: User; accessTok
     }
 
     cachedAccessToken = credential.accessToken;
+    setCachedWorkspaceToken(credential.accessToken);
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error('Google Calendar Sign-In error:', error);
@@ -88,6 +90,7 @@ export const getCachedAccessToken = (): string | null => {
 export const logoutCalendar = async () => {
   await auth.signOut();
   cachedAccessToken = null;
+  setCachedWorkspaceToken(null);
 };
 
 // Google Calendar API V3 Helpers

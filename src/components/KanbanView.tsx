@@ -9,7 +9,7 @@ import {
   AlertCircle 
 } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
-import { getTodayFormatted, getPriorityBadgeStyle } from '../utils/taskUtils';
+import { getTodayFormatted, getPriorityBadgeStyle, getPriorityCardStyle } from '../utils/taskUtils';
 
 interface KanbanViewProps {
   tasks?: Task[];
@@ -103,7 +103,7 @@ export const KanbanView: React.FC<KanbanViewProps> = ({
                       draggable
                       onDragStart={() => handleDragStart(task.id)}
                       onClick={() => onSelectTask(task)}
-                      className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing space-y-2 group"
+                      className={`p-3 rounded-xl shadow-2xs hover:shadow-md transition-all cursor-grab active:cursor-grabbing space-y-2 group ${getPriorityCardStyle(task.priority)}`}
                     >
                       <div className="flex items-center justify-between text-[10px]">
                         <span className="font-mono font-bold text-slate-400">{task.id}</span>

@@ -9,8 +9,13 @@ import {
   RefreshCw, 
   LogOut, 
   Sparkles,
-  Check,
-  AlertCircle
+  AlertCircle,
+  ListTodo,
+  CalendarCheck,
+  Building2,
+  Users,
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import { 
   googleSignInForCalendar, 
@@ -18,10 +23,12 @@ import {
   logoutCalendar, 
   initCalendarAuth,
   createDailyReminderOnGoogleCalendar, 
+  syncTaskToGoogleCalendar,
   fetchGoogleCalendarEvents,
   CalendarEvent 
 } from '../lib/googleCalendar';
 import { Task } from '../types';
+import { getPriorityBadgeStyle } from '../utils/taskUtils';
 
 interface GoogleCalendarModalProps {
   isOpen: boolean;
@@ -38,15 +45,29 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSubmittingReminder, setIsSubmittingReminder] = useState(false);
+  const [isSchedulingExactEvent, setIsSchedulingExactEvent] = useState(false);
+
+  // Unfinished Task selection
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
   const [reminderTitle, setReminderTitle] = useState('Daily Task & Work Review');
+  const [reminderDescription, setReminderDescription] = useState('');
   const [reminderTime, setReminderTime] = useState('09:00');
+  const [scheduledDate, setScheduledDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
   const [popupMinutes, setPopupMinutes] = useState(15);
   const [sendEmail, setSendEmail] = useState(true);
+  const [scheduleMode, setScheduleMode] = useState<'DAILY_REMINDER' | 'EXACT_EVENT'>('DAILY_REMINDER');
+
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [createdEventLink, setCreatedEventLink] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+
+  // Filter unfinished tasks
+  const unfinishedTasks = tasks.filter(t => t && t.status !== 'COMPLETED' && !t.isArchived);
+  const selectedTask = unfinishedTasks.find(t => t.id === selectedTaskId);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -63,6 +84,42 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
     );
     return () => unsub();
   }, [isOpen]);
+
+  // When selected task changes from dropdown, prefill reminder fields
+  const handleSelectUnfinishedTask = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    if (!taskId) {
+      setReminderTitle('Daily Task & Work Review');
+      setReminderDescription('Daily recurring task reminder created from Todo Work Dashboard.');
+      return;
+    }
+
+    const task = unfinishedTasks.find(t => t.id === taskId);
+    if (task) {
+      setReminderTitle(`[Pending Task] ${task.title}`);
+      
+      const descLines = [
+        `Task ID: ${task.id}`,
+        `Status: ${task.status} | Priority: ${task.priority}`,
+        `Category: ${task.category} > ${task.subcategory || 'General'}`,
+        task.assignedTo ? `Assigned To: ${task.assignedTo}` : '',
+        task.dueDate ? `Due Date: ${task.dueDate}` : '',
+        task.description ? `\nDetails: ${task.description}` : ''
+      ];
+
+      if (task.contact?.personName) {
+        descLines.push(`\nFollow-up Contact: ${task.contact.personName} (${task.contact.phone || task.contact.email || ''})`);
+      }
+      if (task.placement?.companyName) {
+        descLines.push(`\nPlacement Drive: ${task.placement.companyName} | HR: ${task.placement.hrName || 'N/A'} | Package: ${task.placement.ctcPackage || 'N/A'}`);
+      }
+
+      setReminderDescription(descLines.filter(Boolean).join('\n'));
+      if (task.dueDate) {
+        setScheduledDate(task.dueDate);
+      }
+    }
+  };
 
   const loadEvents = async (authToken: string) => {
     setIsLoadingEvents(true);
@@ -84,11 +141,11 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
       if (res) {
         setToken(res.accessToken);
         setUserEmail(res.user.email);
-        setSuccessMessage('Successfully connected to Google Calendar!');
+        setSuccessMessage('Successfully connected to Google Calendar & Google Tasks!');
         await loadEvents(res.accessToken);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to authorize Google Calendar.');
+      setErrorMessage(err.message || 'Failed to authorize Google Workspace.');
     } finally {
       setIsConnecting(false);
     }
@@ -99,9 +156,10 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
     setToken(null);
     setUserEmail(null);
     setEvents([]);
-    setSuccessMessage('Disconnected from Google Calendar.');
+    setSuccessMessage('Disconnected from Google Account.');
   };
 
+  // Schedule as Daily Recurring Reminder
   const handleCreateDailyReminder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) {
@@ -117,7 +175,7 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
     try {
       const created = await createDailyReminderOnGoogleCalendar(token, {
         title: reminderTitle,
-        description: 'Daily automated reminder scheduled from Todo Work Dashboard.',
+        description: reminderDescription || 'Daily automated reminder scheduled from Todo Work Dashboard.',
         reminderTime: reminderTime,
         popupMinutesBefore: popupMinutes,
         emailMinutesBefore: sendEmail ? 30 : undefined
@@ -135,11 +193,66 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
     }
   };
 
+  // Schedule as Specific Event on Google Calendar
+  const handleScheduleSpecificTask = async () => {
+    if (!token) {
+      setErrorMessage('Please connect your Google Account first.');
+      return;
+    }
+
+    setIsSchedulingExactEvent(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setCreatedEventLink(null);
+
+    try {
+      const created = await syncTaskToGoogleCalendar(token, {
+        title: reminderTitle.replace(/^\[Pending Task\]\s*/, ''),
+        description: reminderDescription,
+        dueDate: scheduledDate
+      });
+
+      setSuccessMessage(`Task event scheduled on Google Calendar for ${scheduledDate}!`);
+      if (created.htmlLink) {
+        setCreatedEventLink(created.htmlLink);
+      }
+      await loadEvents(token);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to schedule task event on Google Calendar.');
+    } finally {
+      setIsSchedulingExactEvent(false);
+    }
+  };
+
+  // Quick 1-click schedule for any task in list
+  const handleQuickScheduleTask = async (task: Task) => {
+    if (!token) {
+      setErrorMessage('Please sign in with Google first.');
+      return;
+    }
+
+    try {
+      const created = await syncTaskToGoogleCalendar(token, {
+        title: task.title,
+        description: `Priority: ${task.priority} | Category: ${task.category} > ${task.subcategory || ''}\n${task.description || ''}`,
+        dueDate: task.dueDate
+      });
+
+      setSuccessMessage(`Task "${task.title}" fixed to Google Calendar on ${task.dueDate}!`);
+      if (created.htmlLink) {
+        setCreatedEventLink(created.htmlLink);
+      }
+      await loadEvents(token);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to sync task.');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-2xl overflow-hidden my-8">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl overflow-hidden my-8">
         
         {/* Modal Header */}
         <div className="px-6 py-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white flex items-center justify-between">
@@ -153,7 +266,7 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
                 <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-semibold">Live Sync</span>
               </h2>
               <p className="text-xs text-blue-100">
-                Connect your account and create recurring daily reminders on Google Calendar.
+                Fix unfinished tasks to Google Calendar and set up daily recurring work reminders.
               </p>
             </div>
           </div>
@@ -195,7 +308,7 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
             </div>
           )}
 
-          {/* Step 1: Authentication Box */}
+          {/* Authentication Box */}
           <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -204,10 +317,10 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    {token ? 'Connected to Google Calendar' : 'Connect Google Account'}
+                    {token ? 'Connected to Google Account' : 'Connect Google Account'}
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {token ? (userEmail || 'Account Authorized') : 'Authorize to schedule daily reminders and sync tasks'}
+                    {token ? (userEmail || 'Account Authorized (Calendar & Tasks Scopes)') : 'Authorize to schedule daily reminders and sync tasks to Calendar'}
                   </p>
                 </div>
               </div>
@@ -241,19 +354,106 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
             </div>
           </div>
 
-          {/* Step 2: Daily Reminder Form */}
+          {/* Daily Reminder & Fix Unfinished Task Section */}
           <div className="p-5 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 space-y-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                Create Daily Reminder Event
-              </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Create Daily Reminder & Fix Tasks to Google Calendar
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Pick an unfinished task from the dropdown to automatically prefill reminder details.
+                  </p>
+                </div>
+              </div>
+
+              {/* Schedule Mode Selector */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl border border-indigo-200 dark:border-indigo-800/80 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('DAILY_REMINDER')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                    scheduleMode === 'DAILY_REMINDER'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                  }`}
+                >
+                  Daily Reminder
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('EXACT_EVENT')}
+                  className={`px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer ${
+                    scheduleMode === 'EXACT_EVENT'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                  }`}
+                >
+                  Specific Date Event
+                </button>
+              </div>
+            </div>
+
+            {/* Unfinished Task Dropdown (Requirement Highlight) */}
+            <div className="p-3.5 bg-white dark:bg-slate-800/80 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                  <ListTodo className="w-4 h-4 text-indigo-600" />
+                  Select Unfinished Task to Fix / Remind ({unfinishedTasks.length} pending tasks)
+                </label>
+                {selectedTaskId && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectUnfinishedTask('')}
+                    className="text-[11px] text-red-500 hover:underline cursor-pointer"
+                  >
+                    Clear Task Link
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={selectedTaskId}
+                onChange={(e) => handleSelectUnfinishedTask(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-xl text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">-- Choose an Unfinished Task (or create custom reminder) --</option>
+                {unfinishedTasks.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    [{t.priority}] {t.title} — Due: {t.dueDate} ({t.category} / {t.subcategory || 'General'})
+                  </option>
+                ))}
+              </select>
+
+              {/* Selected Task Details Chip */}
+              {selectedTask && (
+                <div className="p-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-lg border border-indigo-200/80 dark:border-indigo-800/60 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">
+                      {selectedTask.title}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${getPriorityBadgeStyle(selectedTask.priority)}`}>
+                      {selectedTask.priority}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-400 flex flex-wrap items-center gap-2">
+                    <span>Due: <strong>{selectedTask.dueDate}</strong></span>
+                    <span>• Category: <strong>{selectedTask.category}</strong></span>
+                    {selectedTask.assignedTo && <span>• Assigned: <strong>{selectedTask.assignedTo}</strong></span>}
+                    {selectedTask.placement?.companyName && (
+                      <span className="text-blue-600 font-bold">• Drive: {selectedTask.placement.companyName}</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleCreateDailyReminder} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Reminder Title
+                  Event / Reminder Title
                 </label>
                 <input
                   type="text"
@@ -261,21 +461,49 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
                   onChange={(e) => setReminderTitle(e.target.value)}
                   placeholder="e.g. Daily Standup & Work Task Review"
                   required
-                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Description / Task Notes (Synced to Google Calendar)
+                </label>
+                <textarea
+                  value={reminderDescription}
+                  onChange={(e) => setReminderDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Details of the task to be reviewed..."
+                  className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {scheduleMode === 'EXACT_EVENT' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                      <CalendarIcon className="w-3.5 h-3.5 text-indigo-500" /> Event Date
+                    </label>
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-indigo-500" /> Daily Time
+                    <Clock className="w-3.5 h-3.5 text-indigo-500" /> Time (HH:MM)
                   </label>
                   <input
                     type="time"
                     value={reminderTime}
                     onChange={(e) => setReminderTime(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
 
@@ -286,7 +514,7 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
                   <select
                     value={popupMinutes}
                     onChange={(e) => setPopupMinutes(Number(e.target.value))}
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value={5}>5 minutes before</option>
                     <option value={10}>10 minutes before</option>
@@ -303,38 +531,121 @@ export const GoogleCalendarModal: React.FC<GoogleCalendarModalProps> = ({
                   id="sendEmail"
                   checked={sendEmail}
                   onChange={(e) => setSendEmail(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500"
+                  className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
                 <label htmlFor="sendEmail" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                  Send email notification 30 minutes before
+                  Send email reminder notification 30 minutes before
                 </label>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingReminder || !token}
-                className={`w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  !token 
-                    ? 'bg-slate-400 cursor-not-allowed opacity-60' 
-                    : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99]'
-                }`}
-              >
-                {isSubmittingReminder ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Scheduling Daily Reminder...
-                  </>
-                ) : (
-                  <>
-                    <CalendarIcon className="w-4 h-4" /> Schedule Daily Reminder on Google Calendar
-                  </>
-                )}
-              </button>
+              {scheduleMode === 'DAILY_REMINDER' ? (
+                <button
+                  type="submit"
+                  disabled={isSubmittingReminder || !token}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    !token 
+                      ? 'bg-slate-400 cursor-not-allowed opacity-60' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99]'
+                  }`}
+                >
+                  {isSubmittingReminder ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Scheduling Daily Reminder...
+                    </>
+                  ) : (
+                    <>
+                      <CalendarIcon className="w-4 h-4" /> Schedule Daily Reminder on Google Calendar
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleScheduleSpecificTask}
+                  disabled={isSchedulingExactEvent || !token}
+                  className={`w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    !token 
+                      ? 'bg-slate-400 cursor-not-allowed opacity-60' 
+                      : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.99]'
+                  }`}
+                >
+                  {isSchedulingExactEvent ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Fixing Task Event to Calendar...
+                    </>
+                  ) : (
+                    <>
+                      <CalendarCheck className="w-4 h-4" /> Fix Task Event to Google Calendar ({scheduledDate})
+                    </>
+                  )}
+                </button>
+              )}
             </form>
           </div>
 
-          {/* Step 3: Google Calendar Synced Events List */}
+          {/* Quick Fix Unfinished Tasks Table */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                <ListTodo className="w-4 h-4 text-blue-600" />
+                Unfinished Tasks Quick Sync Table
+              </h4>
+              <span className="text-[11px] text-slate-500">
+                {unfinishedTasks.length} pending
+              </span>
+            </div>
+
+            {unfinishedTasks.length === 0 ? (
+              <div className="p-4 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                All tasks are currently completed!
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                {unfinishedTasks.slice(0, 6).map((t) => (
+                  <div
+                    key={t.id}
+                    className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs hover:border-indigo-400 transition-colors"
+                  >
+                    <div className="space-y-0.5 max-w-[70%]">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {t.title}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center gap-2">
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${getPriorityBadgeStyle(t.priority)}`}>
+                          {t.priority}
+                        </span>
+                        <span>Due: <strong>{t.dueDate}</strong></span>
+                        <span>• {t.category}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectUnfinishedTask(t.id)}
+                        className="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-lg text-[11px] font-bold border border-indigo-200 dark:border-indigo-800 cursor-pointer"
+                      >
+                        Select in Form
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickScheduleTask(t)}
+                        disabled={!token}
+                        className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-[11px] font-bold shadow-xs flex items-center gap-1 cursor-pointer"
+                        title="1-Click Fix to Calendar"
+                      >
+                        <CalendarCheck className="w-3 h-3" /> Fix to Cal
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Google Calendar Synced Events List */}
           {token && (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                   Upcoming Google Calendar Events

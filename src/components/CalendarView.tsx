@@ -17,7 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Task, TaskStatus, MainCategory } from '../types';
-import { getTodayFormatted } from '../utils/taskUtils';
+import { getTodayFormatted, getPriorityBadgeStyle, getPriorityCardStyle } from '../utils/taskUtils';
 
 interface CalendarViewProps {
   tasks?: Task[];
@@ -292,7 +292,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             {calendarDays.map((dateStr, idx) => {
               if (!dateStr) {
                 return (
-                  <div key={`empty-${idx}`} className="h-24 sm:h-28 bg-slate-50/40 dark:bg-slate-900/10 rounded-xl" />
+                  <div key={`empty-cell-${idx}`} className="h-24 sm:h-28 bg-slate-50/40 dark:bg-slate-900/10 rounded-xl" />
                 );
               }
 
@@ -306,7 +306,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
               return (
                 <div
-                  key={dateStr}
+                  key={`day-cell-${dateStr}-${idx}`}
                   onClick={() => setSelectedDateStr(dateStr)}
                   className={`h-24 sm:h-28 p-1.5 border rounded-xl flex flex-col justify-between transition-all cursor-pointer overflow-hidden relative group ${
                     isSelected
@@ -465,9 +465,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     className={`p-3.5 rounded-xl border transition-all space-y-2 relative group hover:shadow-md cursor-pointer ${
                       isCompleted
                         ? 'bg-slate-50/80 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-75'
-                        : t.priority === 'CRITICAL'
-                          ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-900/50 hover:border-red-400'
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                        : getPriorityCardStyle(t.priority)
                     }`}
                     onClick={() => onSelectTask(t)}
                   >
@@ -494,13 +492,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-mono text-slate-400">{t.id}</span>
-                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                            t.priority === 'CRITICAL'
-                              ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300'
-                              : t.priority === 'HIGH'
-                                ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
-                                : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                          }`}>
+                          <span className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-md ${getPriorityBadgeStyle(t.priority)}`}>
                             {t.priority}
                           </span>
                         </div>

@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   ChevronDown,
   RotateCcw,
-  Settings
+  Settings,
+  CheckSquare
 } from 'lucide-react';
 import { Task, NotificationItem } from '../types';
 
@@ -32,6 +33,7 @@ interface HeaderProps {
   onToggleNotifications?: () => void;
   onOpenSettings?: () => void;
   onOpenGoogleCalendar?: () => void;
+  onOpenGoogleTasks?: () => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onResetData?: () => void;
@@ -51,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleNotifications,
   onOpenSettings,
   onOpenGoogleCalendar,
+  onOpenGoogleTasks,
   isDarkMode = false,
   onToggleDarkMode = () => {},
   onResetData = () => {},
@@ -193,6 +196,17 @@ export const Header: React.FC<HeaderProps> = ({
               title="Google Calendar Daily Reminders"
             >
               <Calendar className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Google Tasks Integration */}
+          {onOpenGoogleTasks && (
+            <button
+              onClick={onOpenGoogleTasks}
+              className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/60 rounded-xl transition-colors cursor-pointer"
+              title="Google Tasks Sync & Lists"
+            >
+              <CheckSquare className="w-5 h-5" />
             </button>
           )}
 

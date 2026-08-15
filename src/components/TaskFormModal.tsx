@@ -12,7 +12,14 @@ import {
   Paperclip, 
   Plus, 
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Briefcase,
+  GraduationCap,
+  CheckSquare,
+  Sparkles,
+  Loader2,
+  CheckCircle2,
+  ExternalLink
 } from 'lucide-react';
 import { 
   Task, 
@@ -24,6 +31,8 @@ import {
   InnovationLevel
 } from '../types';
 import { getTodayFormatted, generateTaskId } from '../utils/taskUtils';
+import { autoFixTaskToGoogleWorkspace, getCurrentGoogleAccount } from '../lib/googleSync';
+import { googleSignInForWorkspace } from '../lib/googleTasks';
 
 interface TaskFormModalProps {
   isOpen: boolean;
@@ -64,18 +73,20 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
     TOP_PRIORITY: ['CIAT / Internal Assessment', 'Examination', 'Accreditation', 'Faculty Follow-up', 'Reports'],
     DEPARTMENT_WORK: [
       'Academic', 'Lesson Plan', 'Syllabus Completion', 'Attendance', 
+      'Placement', 'Placement Drive', 'Placement Cell', 'Placement Training',
       'CIAT / Internal Assessment', 'Examination', 'Student Mentoring', 
       'Faculty Follow-up', 'Department Meetings', 'NBA', 'NAAC', 'IQAC', 
       'NIRF', 'IIPC', 'CDC', 'Accreditation', 'Student Activities', 
       'Faculty Activities', 'Department Events', 'Reports', 'Documentation'
     ],
     FOLLOW_UPS: [
+      'Placement Follow-up', 'Company HR Follow-up', 'Placement Drive',
       'Faculty Follow-up', 'Student Mentoring', 'Industry Collaboration', 
       'Accreditation', 'CIAT / Internal Assessment', 'Examination', 'Reports'
     ],
     INSTITUTIONAL_WORK: [
       'Principal Office', 'Academic Office', 'Examination Cell', 'IQAC', 
-      'NAAC', 'NBA', 'NIRF', 'Placement Cell', 'IIPC', 'FDP & Workshops', 
+      'NAAC', 'NBA', 'NIRF', 'Placement Cell', 'Placement Drive', 'IIPC', 'FDP & Workshops', 
       'Department Events', 'Reports', 'Documentation'
     ],
     INNOVATION_HUB: [
@@ -119,6 +130,19 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   const [contactPhone, setContactPhone] = useState('');
   const [followUpNotes, setFollowUpNotes] = useState('');
 
+  // Placement fields
+  const [placementCompany, setPlacementCompany] = useState('');
+  const [placementHrName, setPlacementHrName] = useState('');
+  const [placementHrEmail, setPlacementHrEmail] = useState('');
+  const [placementHrPhone, setPlacementHrPhone] = useState('');
+  const [placementType, setPlacementType] = useState<'On-Campus Drive' | 'Off-Campus Drive' | 'Internship' | 'Industrial Visit' | 'Placement Training' | 'MOU Signing' | 'Job Offer Follow-up'>('On-Campus Drive');
+  const [placementCtc, setPlacementCtc] = useState('');
+  const [placementEligibleBranches, setPlacementEligibleBranches] = useState('');
+  const [placementDriveDate, setPlacementDriveDate] = useState('');
+  const [placementStudentsCount, setPlacementStudentsCount] = useState('');
+  const [placementStatus, setPlacementStatus] = useState<'Upcoming Drive' | 'Interview Scheduled' | 'Awaiting Offer Letters' | 'Completed' | 'Follow-up Pending'>('Upcoming Drive');
+  const [placementRemarks, setPlacementRemarks] = useState('');
+
   // Innovation Hub fields
   const [eventName, setEventName] = useState('');
   const [studentOrTeam, setStudentOrTeam] = useState('');
@@ -137,6 +161,47 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   const [notesList, setNotesList] = useState<string[]>([]);
   const [newNote, setNewNote] = useState('');
   const [recurrence, setRecurrence] = useState<RecurrencePattern>('NONE');
+
+  // Google Workspace Auto-Fix Settings
+  const [autoSyncCalendar, setAutoSyncCalendar] = useState<boolean>(true);
+  const [autoSyncTasks, setAutoSyncTasks] = useState<boolean>(true);
+  const [isSyncingWorkspace, setIsSyncingWorkspace] = useState<boolean>(false);
+  const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
+  const [isGoogleConnected, setIsGoogleConnected] = useState<boolean>(false);
+  const [syncStatusBanner, setSyncStatusBanner] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  useEffect(() => {
+    const acc = getCurrentGoogleAccount();
+    if (acc.user?.email || acc.token) {
+      setGoogleUserEmail(acc.user?.email || 'dhananjeiyan.backup@gmail.com');
+      setIsGoogleConnected(!!acc.token);
+    } else {
+      setGoogleUserEmail('dhananjeiyan.backup@gmail.com');
+      setIsGoogleConnected(false);
+    }
+  }, [isOpen]);
+
+  const handleConnectGoogleNow = async () => {
+    try {
+      setIsSyncingWorkspace(true);
+      const res = await googleSignInForWorkspace();
+      if (res) {
+        setGoogleUserEmail(res.user.email || 'dhananjeiyan.backup@gmail.com');
+        setIsGoogleConnected(true);
+        setSyncStatusBanner({
+          type: 'success',
+          message: `Connected Google Account (${res.user.email}). Ready to auto-fix tasks & calendar events!`
+        });
+      }
+    } catch (err: any) {
+      setSyncStatusBanner({
+        type: 'error',
+        message: `Failed to authorize Google: ${err.message}`
+      });
+    } finally {
+      setIsSyncingWorkspace(false);
+    }
+  };
 
   useEffect(() => {
     if (currentTask) {
@@ -164,6 +229,20 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
         setContactEmail(currentTask.contact.email || '');
         setContactPhone(currentTask.contact.phone || '');
         setFollowUpNotes(currentTask.contact.notes || '');
+      }
+
+      if (currentTask.placement) {
+        setPlacementCompany(currentTask.placement.companyName || '');
+        setPlacementHrName(currentTask.placement.hrName || '');
+        setPlacementHrEmail(currentTask.placement.contactEmail || '');
+        setPlacementHrPhone(currentTask.placement.contactPhone || '');
+        setPlacementType(currentTask.placement.placementType || 'On-Campus Drive');
+        setPlacementCtc(currentTask.placement.ctcPackage || '');
+        setPlacementEligibleBranches(currentTask.placement.eligibleBranches || '');
+        setPlacementDriveDate(currentTask.placement.driveDate || '');
+        setPlacementStudentsCount(currentTask.placement.studentsShortlisted || '');
+        setPlacementStatus(currentTask.placement.placementStatus || 'Upcoming Drive');
+        setPlacementRemarks(currentTask.placement.remarks || '');
       }
 
       if (currentTask.innovation) {
@@ -209,6 +288,18 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       setContactPhone('');
       setFollowUpNotes('');
 
+      setPlacementCompany('');
+      setPlacementHrName('');
+      setPlacementHrEmail('');
+      setPlacementHrPhone('');
+      setPlacementType('On-Campus Drive');
+      setPlacementCtc('');
+      setPlacementEligibleBranches('');
+      setPlacementDriveDate('');
+      setPlacementStudentsCount('');
+      setPlacementStatus('Upcoming Drive');
+      setPlacementRemarks('');
+
       setEventName('');
       setStudentOrTeam('');
       setEventDate('');
@@ -248,9 +339,29 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
     setNotesList(notesList.filter((_, i) => i !== idx));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || isSyncingWorkspace) return;
+
+    setIsSyncingWorkspace(true);
+    setSyncStatusBanner(null);
+
+    const initialLogs = currentTask ? [
+      ...(currentTask.activityLogs || []),
+      {
+        id: `log-${Date.now()}`,
+        timestamp: `${today} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        action: 'Updated' as const,
+        description: 'Task details updated.'
+      }
+    ] : [
+      {
+        id: `log-${Date.now()}`,
+        timestamp: `${today} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        action: 'Created' as const,
+        description: 'New task created.'
+      }
+    ];
 
     const taskToSave: Task = {
       id: taskId,
@@ -267,17 +378,30 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       reminderDate: reminderDate || undefined,
       estimatedTimeHours: Number(estimatedTimeHours) || 0,
       actualTimeHours: Number(actualTimeHours) || 0,
-      followUpRequired: followUpRequired || category === 'FOLLOW_UPS',
+      followUpRequired: followUpRequired || category === 'FOLLOW_UPS' || subcategory.toLowerCase().includes('follow-up'),
       followUpDate: followUpDate || dueDate,
-      contact: (personName || followUpRequired || category === 'FOLLOW_UPS') ? {
-        personName: personName.trim(),
-        departmentOrOrg: departmentOrOrg.trim(),
+      contact: (personName || placementHrName || placementCompany || followUpRequired || category === 'FOLLOW_UPS') ? {
+        personName: (personName || placementHrName).trim(),
+        departmentOrOrg: (departmentOrOrg || placementCompany || 'Placement Cell').trim(),
         contactType,
-        email: contactEmail.trim(),
-        phone: contactPhone.trim(),
+        email: (contactEmail || placementHrEmail).trim(),
+        phone: (contactPhone || placementHrPhone).trim(),
         nextFollowUpDate: followUpDate || dueDate,
-        notes: followUpNotes.trim(),
+        notes: followUpNotes.trim() || placementRemarks.trim() || (placementCtc ? `CTC: ${placementCtc}` : undefined),
         status: status === 'COMPLETED' ? 'Resolved' : 'Pending'
+      } : undefined,
+      placement: (placementCompany || subcategory.toLowerCase().includes('placement') || subcategory.toLowerCase().includes('company')) ? {
+        companyName: placementCompany.trim() || relatedOrganization.trim() || 'Partner Company / Placement Drive',
+        hrName: placementHrName.trim() || personName.trim() || undefined,
+        contactEmail: placementHrEmail.trim() || contactEmail.trim() || undefined,
+        contactPhone: placementHrPhone.trim() || contactPhone.trim() || undefined,
+        placementType,
+        ctcPackage: placementCtc.trim() || undefined,
+        eligibleBranches: placementEligibleBranches.trim() || undefined,
+        driveDate: placementDriveDate || dueDate,
+        studentsShortlisted: placementStudentsCount.trim() || undefined,
+        placementStatus,
+        remarks: placementRemarks.trim() || undefined
       } : undefined,
       innovation: (eventName || category === 'INNOVATION_HUB') ? {
         eventName: eventName.trim(),
@@ -296,30 +420,51 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       relatedEvent: relatedEvent.trim() || undefined,
       notes: notesList,
       attachments: currentTask?.attachments || [],
-      activityLogs: currentTask ? [
-        ...(currentTask.activityLogs || []),
-        {
-          id: `log-${Date.now()}`,
-          timestamp: `${today} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-          action: 'Updated',
-          description: 'Task details updated.'
-        }
-      ] : [
-        {
-          id: `log-${Date.now()}`,
-          timestamp: `${today} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-          action: 'Created',
-          description: 'New task created.'
-        }
-      ],
-      recurrence
+      activityLogs: initialLogs,
+      recurrence,
+      googleSyncEmail: googleUserEmail || undefined
     };
+
+    // Auto-fix to Google Calendar & Google Tasks if selected
+    if (autoSyncCalendar || autoSyncTasks) {
+      try {
+        const syncRes = await autoFixTaskToGoogleWorkspace(taskToSave, {
+          syncCalendar: autoSyncCalendar,
+          syncTasks: autoSyncTasks,
+          requireAuthPrompt: true
+        });
+
+        if (syncRes.success) {
+          const targetMail = syncRes.userEmail || googleUserEmail || 'dhananjeiyan.backup@gmail.com';
+          taskToSave.googleSyncEmail = targetMail;
+          if (syncRes.calendarEvent?.id) {
+            taskToSave.googleCalendarEventId = syncRes.calendarEvent.id;
+            taskToSave.googleCalendarLink = syncRes.calendarEvent.htmlLink;
+          }
+          if (syncRes.googleTask?.id) {
+            taskToSave.googleTaskId = syncRes.googleTask.id;
+          }
+
+          taskToSave.activityLogs.unshift({
+            id: `act_${Date.now()}`,
+            action: 'Updated',
+            description: `Auto-fixed to Google Calendar & Google Tasks for ${targetMail}`,
+            timestamp: new Date().toLocaleString()
+          });
+        } else if (syncRes.error) {
+          console.warn('Google Workspace auto-sync note:', syncRes.error);
+        }
+      } catch (err: any) {
+        console.error('Error during auto-sync on create task:', err);
+      }
+    }
 
     if (onSave) {
       onSave(taskToSave);
     } else if (onSaveTask) {
       onSaveTask(taskToSave);
     }
+    setIsSyncingWorkspace(false);
     onClose();
   };
 
@@ -667,6 +812,158 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             )}
           </div>
 
+          {/* Placement & Drive Details Section */}
+          {(subcategory.toLowerCase().includes('placement') || subcategory.toLowerCase().includes('company') || category === 'DEPARTMENT_WORK' || category === 'FOLLOW_UPS' || category === 'INSTITUTIONAL_WORK') && (
+            <div className="border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-blue-900 dark:text-blue-300 text-xs sm:text-sm flex items-center gap-1.5">
+                  <Briefcase className="w-4 h-4 text-blue-600" />
+                  Placement & Corporate Drive Details
+                </h4>
+                <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-0.5 rounded-md">
+                  Placement & Follow-ups
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Company / Organization
+                  </label>
+                  <input
+                    type="text"
+                    value={placementCompany}
+                    onChange={(e) => setPlacementCompany(e.target.value)}
+                    placeholder="e.g. TCS / Infosys / Zoho"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    HR / Contact Person Name
+                  </label>
+                  <input
+                    type="text"
+                    value={placementHrName}
+                    onChange={(e) => setPlacementHrName(e.target.value)}
+                    placeholder="e.g. Ms. Priya Sharma (HR Lead)"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Placement Activity Type
+                  </label>
+                  <select
+                    value={placementType}
+                    onChange={(e) => setPlacementType(e.target.value as any)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs font-semibold"
+                  >
+                    <option value="On-Campus Drive">On-Campus Drive</option>
+                    <option value="Off-Campus Drive">Off-Campus Drive</option>
+                    <option value="Internship">Internship Placement</option>
+                    <option value="Industrial Visit">Industrial Visit</option>
+                    <option value="Placement Training">Placement Training / Workshop</option>
+                    <option value="MOU Signing">MOU / Corporate Partnership</option>
+                    <option value="Job Offer Follow-up">Job Offer / LOI Follow-up</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    CTC Package Offered
+                  </label>
+                  <input
+                    type="text"
+                    value={placementCtc}
+                    onChange={(e) => setPlacementCtc(e.target.value)}
+                    placeholder="e.g. 6.5 LPA / 12 LPA"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Eligible Dept / Batches
+                  </label>
+                  <input
+                    type="text"
+                    value={placementEligibleBranches}
+                    onChange={(e) => setPlacementEligibleBranches(e.target.value)}
+                    placeholder="e.g. CSE, ECE, IT (2026 Batch)"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Drive / Schedule Date
+                  </label>
+                  <input
+                    type="date"
+                    value={placementDriveDate}
+                    onChange={(e) => setPlacementDriveDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    HR Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={placementHrPhone}
+                    onChange={(e) => setPlacementHrPhone(e.target.value)}
+                    placeholder="+91 98765 12345"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    HR Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={placementHrEmail}
+                    onChange={(e) => setPlacementHrEmail(e.target.value)}
+                    placeholder="hr.drives@company.com"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Shortlisted / Offers
+                  </label>
+                  <input
+                    type="text"
+                    value={placementStudentsCount}
+                    onChange={(e) => setPlacementStudentsCount(e.target.value)}
+                    placeholder="e.g. 18 Students Selected"
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div className="md:col-span-3">
+                  <label className="block text-[11px] font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                    Placement & Drive Status / Remarks
+                  </label>
+                  <input
+                    type="text"
+                    value={placementRemarks}
+                    onChange={(e) => setPlacementRemarks(e.target.value)}
+                    placeholder="e.g. PPT completed, Round 1 online test scheduled tomorrow..."
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Innovation Hub Specific Section */}
           {category === 'INNOVATION_HUB' && (
             <div className="border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 rounded-xl space-y-3">
@@ -846,24 +1143,127 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             )}
           </div>
 
+          {/* Google Calendar & Google Tasks Auto-Fix Integration */}
+          <div className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/80 dark:from-slate-800/80 dark:via-indigo-950/40 dark:to-slate-800/80 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-xs text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    Google Workspace Auto-Sync
+                    <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-semibold px-2 py-0.5 rounded-full">
+                      Auto-Fix
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Auto-fix event & task to Google Calendar & Google Tasks on Create Task
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[11px] font-medium text-slate-700 dark:text-slate-300 shadow-2xs">
+                  <Mail className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="truncate max-w-[170px]" title={googleUserEmail || 'dhananjeiyan.backup@gmail.com'}>
+                    {googleUserEmail || 'dhananjeiyan.backup@gmail.com'}
+                  </span>
+                </div>
+                {!isGoogleConnected && (
+                  <button
+                    type="button"
+                    onClick={handleConnectGoogleNow}
+                    disabled={isSyncingWorkspace}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                  >
+                    {isSyncingWorkspace ? <Loader2 className="w-3 h-3 animate-spin" /> : <ExternalLink className="w-3 h-3" />}
+                    <span>Connect Google</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {syncStatusBanner && (
+              <div className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
+                syncStatusBanner.type === 'success' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200' :
+                syncStatusBanner.type === 'error' ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200' :
+                'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200'
+              }`}>
+                {syncStatusBanner.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
+                {syncStatusBanner.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                <span>{syncStatusBanner.message}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-indigo-100 dark:border-indigo-900/50">
+              <label className="flex items-center gap-2.5 p-2 bg-white/80 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoSyncCalendar}
+                  onChange={(e) => setAutoSyncCalendar(e.target.checked)}
+                  className="rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200 font-semibold">
+                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <span>Auto-Fix to Google Calendar</span>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2.5 p-2 bg-white/80 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={autoSyncTasks}
+                  onChange={(e) => setAutoSyncTasks(e.target.checked)}
+                  className="rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <div className="flex items-center gap-1.5 text-xs text-slate-800 dark:text-slate-200 font-semibold">
+                  <CheckSquare className="w-4 h-4 text-emerald-500" />
+                  <span>Auto-Fix to Google Tasks</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
         </form>
 
         {/* Modal Footer Actions */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-md cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            <span>{existingTask ? 'Save Changes' : 'Create Task'}</span>
-          </button>
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between gap-3">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            {(autoSyncCalendar || autoSyncTasks) && (
+              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-medium">
+                <Sparkles className="w-3.5 h-3.5" />
+                Will auto-fix to {googleUserEmail || 'dhananjeiyan.backup@gmail.com'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 ml-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSyncingWorkspace}
+              className="px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSyncingWorkspace}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-md cursor-pointer disabled:opacity-75"
+            >
+              {isSyncingWorkspace ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Fixing to Calendar & Tasks...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  <span>{existingTask ? 'Save Changes' : 'Create Task'}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
       </div>

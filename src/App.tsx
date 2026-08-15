@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CheckCircle2, X } from 'lucide-react';
 import { Task, ViewMode, MainCategory, TaskStatus, Attachment } from './types';
 import { INITIAL_TASKS } from './data/initialTasks';
 import { 
@@ -28,6 +29,7 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { SettingsModal } from './components/SettingsModal';
 import { GoogleCalendarModal } from './components/GoogleCalendarModal';
+import { GoogleTasksModal } from './components/GoogleTasksModal';
 
 export default function App() {
   // 1. Live Task State connected to Firestore Database
@@ -81,6 +83,8 @@ export default function App() {
   const [isNotificationOpen, setIsNotificationOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isGoogleCalendarOpen, setIsGoogleCalendarOpen] = useState<boolean>(false);
+  const [isGoogleTasksOpen, setIsGoogleTasksOpen] = useState<boolean>(false);
+  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
 
   // Notifications calculation
   const notifications = generateNotifications(tasks);
@@ -120,9 +124,17 @@ export default function App() {
         ]
       };
       await saveTaskToDb(updated);
+
+      if (taskData.googleSyncEmail || taskData.googleCalendarEventId || taskData.googleTaskId) {
+        setToastNotification({
+          type: 'success',
+          message: `Task updated & auto-fixed to Google Calendar & Google Tasks (${taskData.googleSyncEmail || 'dhananjeiyan.backup@gmail.com'})`
+        });
+        setTimeout(() => setToastNotification(null), 5000);
+      }
     } else {
       // Create new task
-      const newId = `TSK-${String(Date.now()).slice(-5)}`;
+      const newId = taskData.id || `TSK-${String(Date.now()).slice(-5)}`;
       const newTask: Task = {
         id: newId,
         title: taskData.title || 'Untitled Task',
@@ -137,10 +149,10 @@ export default function App() {
         assignedTo: taskData.assignedTo || 'Unassigned',
         relatedOrganization: taskData.relatedOrganization || '',
         estimatedTimeHours: taskData.estimatedTimeHours || 1,
-        createdDate: getTodayFormatted(),
+        createdDate: taskData.createdDate || getTodayFormatted(),
         isArchived: false,
         notes: taskData.notes || [],
-        activityLogs: [
+        activityLogs: taskData.activityLogs || [
           {
             id: `act_${Date.now()}`,
             action: 'Created',
@@ -150,10 +162,24 @@ export default function App() {
         ],
         followUpRequired: taskData.followUpRequired || false,
         contact: taskData.contact,
-        innovation: taskData.innovation
+        placement: taskData.placement,
+        innovation: taskData.innovation,
+        recurrence: taskData.recurrence || 'NONE',
+        googleCalendarEventId: taskData.googleCalendarEventId,
+        googleCalendarLink: taskData.googleCalendarLink,
+        googleTaskId: taskData.googleTaskId,
+        googleSyncEmail: taskData.googleSyncEmail
       };
 
       await saveTaskToDb(newTask);
+
+      if (taskData.googleSyncEmail || taskData.googleCalendarEventId || taskData.googleTaskId) {
+        setToastNotification({
+          type: 'success',
+          message: `Task "${newTask.title}" fixed automatically to Google Calendar & Google Tasks for ${newTask.googleSyncEmail || 'dhananjeiyan.backup@gmail.com'}`
+        });
+        setTimeout(() => setToastNotification(null), 6000);
+      }
     }
 
     setIsFormModalOpen(false);
@@ -470,6 +496,7 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenGoogleCalendar={() => setIsGoogleCalendarOpen(true)}
+        onOpenGoogleTasks={() => setIsGoogleTasksOpen(true)}
         onQuickAdd={() => handleQuickAdd()}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
@@ -478,6 +505,22 @@ export default function App() {
         onSelectTask={handleSelectTask}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
+
+      {/* Floating Auto-Sync Notification Banner */}
+      {toastNotification && (
+        <div className="fixed top-16 right-4 z-50 max-w-md bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-emerald-400">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-200" />
+          <p className="text-xs font-semibold leading-relaxed flex-1">
+            {toastNotification.message}
+          </p>
+          <button
+            onClick={() => setToastNotification(null)}
+            className="p-1 hover:bg-emerald-700/80 rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden relative">
         
@@ -489,6 +532,7 @@ export default function App() {
           selectedCategory={selectedCategory}
           tasks={tasks}
           onOpenGoogleCalendar={() => setIsGoogleCalendarOpen(true)}
+          onOpenGoogleTasks={() => setIsGoogleTasksOpen(true)}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
@@ -557,6 +601,14 @@ export default function App() {
         isOpen={isGoogleCalendarOpen}
         onClose={() => setIsGoogleCalendarOpen(false)}
         tasks={tasks}
+      />
+
+      {/* Google Tasks Integration Modal */}
+      <GoogleTasksModal
+        isOpen={isGoogleTasksOpen}
+        onClose={() => setIsGoogleTasksOpen(false)}
+        tasks={tasks}
+        onImportTask={handleSaveTask}
       />
 
     </div>

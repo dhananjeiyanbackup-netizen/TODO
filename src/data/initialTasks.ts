@@ -322,5 +322,95 @@ export const INITIAL_TASKS: Task[] = [
       { id: 'log-15', timestamp: `${TODAY} 11:00 AM`, action: 'Created', description: 'Lab supplies purchase.' }
     ],
     recurrence: 'NONE'
+  },
+  {
+    id: 'TASK-1013',
+    title: 'TCS Digital & Ninja On-Campus Placement Drive Coordination',
+    description: 'Coordinate lab allocation for 250 CSE/IT students, arrange online test proctors, and finalize HR hospitality.',
+    category: 'DEPARTMENT_WORK',
+    subcategory: 'Placement Drive',
+    priority: 'CRITICAL',
+    status: 'IN_PROGRESS',
+    assignedTo: 'Placement Cell Coordinator',
+    createdDate: YESTERDAY,
+    dueDate: TOMORROW,
+    reminderDate: TODAY,
+    estimatedTimeHours: 6,
+    actualTimeHours: 3,
+    followUpRequired: true,
+    followUpDate: TODAY,
+    contact: {
+      personName: 'Ms. Priya Sharma',
+      departmentOrOrg: 'TCS Campus Recruitment Team',
+      contactType: 'Phone',
+      email: 'priya.sharma@tcs.com',
+      phone: '+91 98765 11223',
+      lastContactedDate: TODAY,
+      nextFollowUpDate: TODAY,
+      notes: 'HR confirmed online test link distribution at 09:00 AM tomorrow.',
+      status: 'Pending'
+    },
+    placement: {
+      companyName: 'TCS (Tata Consultancy Services)',
+      hrName: 'Ms. Priya Sharma (Campus Talent Acquisition Lead)',
+      contactEmail: 'priya.sharma@tcs.com',
+      contactPhone: '+91 98765 11223',
+      placementType: 'On-Campus Drive',
+      ctcPackage: '7.2 LPA (Digital) / 3.8 LPA (Ninja)',
+      eligibleBranches: 'CSE, IT, ECE, EEE (2026 Batch)',
+      driveDate: TOMORROW,
+      studentsShortlisted: '240 Students Registered',
+      placementStatus: 'Upcoming Drive',
+      remarks: 'Lab 1 to 4 reserved with high-speed internet and power backup.'
+    },
+    notes: ['Send hall ticket reminders to students.', 'Arrange auditorium for PPT session.'],
+    activityLogs: [
+      { id: 'log-16', timestamp: `${YESTERDAY} 02:00 PM`, action: 'Created', description: 'TCS placement drive task created.' }
+    ],
+    recurrence: 'NONE'
+  },
+  {
+    id: 'TASK-1014',
+    title: 'HR Follow-up for Zoho Corporation MOU & Internship Drive',
+    description: 'Follow up with Zoho HR lead regarding signed MOU document and 6-month stipend internship offers.',
+    category: 'FOLLOW_UPS',
+    subcategory: 'Placement Follow-up',
+    priority: 'HIGH',
+    status: 'PENDING',
+    assignedTo: 'Dr. Vignesh (Placement Director)',
+    createdDate: TODAY,
+    dueDate: THIS_WEEK,
+    reminderDate: TODAY,
+    estimatedTimeHours: 2,
+    followUpRequired: true,
+    followUpDate: TODAY,
+    contact: {
+      personName: 'Mr. Rajesh K',
+      departmentOrOrg: 'Zoho Corporation HR',
+      contactType: 'Email',
+      email: 'rajesh.k@zohocorp.com',
+      phone: '+91 94455 66778',
+      lastContactedDate: YESTERDAY,
+      nextFollowUpDate: TODAY,
+      notes: 'Awaiting revised MOU draft from Zoho legal team.',
+      status: 'Pending'
+    },
+    placement: {
+      companyName: 'Zoho Corporation',
+      hrName: 'Mr. Rajesh K (University Relations Manager)',
+      contactEmail: 'rajesh.k@zohocorp.com',
+      contactPhone: '+91 94455 66778',
+      placementType: 'Internship',
+      ctcPackage: '25,000 / month stipend (PPO up to 8.5 LPA)',
+      eligibleBranches: 'All B.E / B.Tech Batches',
+      driveDate: NEXT_WEEK,
+      studentsShortlisted: '15 Interns Shortlisted',
+      placementStatus: 'Follow-up Pending',
+      remarks: 'Follow up on Principal sign-off once Zoho legal sends draft.'
+    },
+    activityLogs: [
+      { id: 'log-17', timestamp: `${TODAY} 10:30 AM`, action: 'Created', description: 'Zoho MOU follow up initialized.' }
+    ],
+    recurrence: 'NONE'
   }
 ];

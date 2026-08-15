@@ -38,17 +38,22 @@ export const DepartmentDashboardView: React.FC<DepartmentDashboardViewProps> = (
 
   // Metrics
   const pendingCount = deptTasks.filter(t => t && t.status !== 'COMPLETED').length;
+  const placementWork = safeTasks.filter(t => t && (t.subcategory?.includes('Placement') || t.subcategory?.includes('Company') || !!t.placement)).length;
   const facultyFollowups = safeTasks.filter(t => t && (t.subcategory === 'Faculty Follow-up' || t.contact?.personName?.includes('Faculty') || t.contact?.personName?.includes('HOD') || t.contact?.personName?.includes('Dr.'))).length;
   const studentFollowups = safeTasks.filter(t => t && (t.subcategory === 'Student Mentoring' || t.subcategory === 'Student Activities')).length;
   const academicWork = deptTasks.filter(t => ['Academic', 'Lesson Plan', 'Syllabus Completion', 'Attendance'].includes(t.subcategory)).length;
   const examWork = deptTasks.filter(t => ['CIAT / Internal Assessment', 'Examination', 'Examination Cell'].includes(t.subcategory)).length;
   const nbaNaacWork = deptTasks.filter(t => ['NBA', 'NAAC', 'Accreditation'].includes(t.subcategory)).length;
   const iqacWork = deptTasks.filter(t => ['IQAC', 'NIRF'].includes(t.subcategory)).length;
-  const reportsPending = deptTasks.filter(t => t.subcategory === 'Reports' && t.status !== 'COMPLETED').length;
-  const docsPending = deptTasks.filter(t => t.subcategory === 'Documentation' && t.status !== 'COMPLETED').length;
 
   const filteredTasks = deptTasks.filter(t => {
-    if (selectedSubcategory !== 'ALL' && t.subcategory !== selectedSubcategory) return false;
+    if (selectedSubcategory !== 'ALL') {
+      if (selectedSubcategory === 'Placement & Drives') {
+        if (!t.subcategory?.includes('Placement') && !t.subcategory?.includes('Company') && !t.placement) return false;
+      } else if (t.subcategory !== selectedSubcategory) {
+        return false;
+      }
+    }
     if (selectedPriority !== 'ALL' && t.priority !== selectedPriority) return false;
     if (selectedStatus !== 'ALL' && t.status !== selectedStatus) return false;
     if (assigneeFilter.trim() && !t.assignedTo?.toLowerCase().includes(assigneeFilter.toLowerCase())) return false;
@@ -79,10 +84,15 @@ export const DepartmentDashboardView: React.FC<DepartmentDashboardViewProps> = (
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl">
           <span className="text-xs text-blue-700 dark:text-blue-300 font-bold block">Pending Dept Tasks</span>
           <span className="text-2xl font-black text-blue-900 dark:text-blue-100">{pendingCount}</span>
+        </div>
+
+        <div className="p-3 bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800 rounded-2xl">
+          <span className="text-xs text-cyan-700 dark:text-cyan-300 font-bold block">Placement & Drives</span>
+          <span className="text-2xl font-black text-cyan-900 dark:text-cyan-100">{placementWork}</span>
         </div>
 
         <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-2xl">
@@ -164,7 +174,7 @@ export const DepartmentDashboardView: React.FC<DepartmentDashboardViewProps> = (
           >
             All Subcategories ({deptTasks.length})
           </button>
-          {['Academic', 'CIAT / Internal Assessment', 'Examination', 'NBA', 'NAAC', 'IQAC', 'Faculty Follow-up', 'Reports', 'Documentation'].map((sub) => (
+          {['Placement & Drives', 'Academic', 'CIAT / Internal Assessment', 'Examination', 'NBA', 'NAAC', 'IQAC', 'Faculty Follow-up', 'Reports', 'Documentation'].map((sub) => (
             <button
               key={sub}
               onClick={() => setSelectedSubcategory(sub)}

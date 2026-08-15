@@ -305,13 +305,28 @@ export const getCategoryBadgeStyle = (category: MainCategory) => {
 export const getPriorityBadgeStyle = (priority: Priority) => {
   switch (priority) {
     case 'CRITICAL':
-      return 'bg-red-500 text-white font-semibold shadow-xs';
+      return 'bg-red-500 text-white font-extrabold shadow-2xs';
     case 'HIGH':
-      return 'bg-orange-500 text-white font-medium';
+      return 'bg-orange-500 text-white font-extrabold shadow-2xs';
     case 'MEDIUM':
-      return 'bg-amber-500 text-white font-medium';
+      return 'bg-yellow-500 text-slate-950 font-extrabold shadow-2xs';
     case 'LOW':
-      return 'bg-slate-500 text-white font-medium';
+      return 'bg-emerald-500 text-white font-extrabold shadow-2xs';
+  }
+};
+
+export const getPriorityCardStyle = (priority: Priority) => {
+  switch (priority) {
+    case 'CRITICAL':
+      return 'border-l-4 border-l-red-500 border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/30 hover:border-red-300 dark:hover:border-red-800';
+    case 'HIGH':
+      return 'border-l-4 border-l-orange-500 border-orange-200 dark:border-orange-900/60 bg-orange-50/50 dark:bg-orange-950/30 hover:border-orange-300 dark:hover:border-orange-800';
+    case 'MEDIUM':
+      return 'border-l-4 border-l-yellow-500 border-yellow-200 dark:border-yellow-900/60 bg-yellow-50/50 dark:bg-yellow-950/30 hover:border-yellow-300 dark:hover:border-yellow-800';
+    case 'LOW':
+      return 'border-l-4 border-l-emerald-500 border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/30 hover:border-emerald-300 dark:hover:border-emerald-800';
+    default:
+      return 'border-l-4 border-l-slate-400 border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-800/90 hover:border-slate-300 dark:hover:border-slate-600';
   }
 };
 

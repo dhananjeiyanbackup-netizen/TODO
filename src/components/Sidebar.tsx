@@ -28,6 +28,7 @@ interface SidebarProps {
   tasks?: Task[];
   onQuickAdd?: (categoryPreset?: string) => void;
   onOpenGoogleCalendar?: () => void;
+  onOpenGoogleTasks?: () => void;
   isOpen?: boolean;
   onCloseMobile?: () => void;
   onClose?: () => void;
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tasks = [],
   onQuickAdd = () => {},
   onOpenGoogleCalendar,
+  onOpenGoogleTasks,
   isOpen = false,
   onCloseMobile,
   onClose
@@ -128,10 +130,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onOpenGoogleCalendar();
                 handleCloseSidebar();
               }}
-              className="w-full py-2 px-3 bg-slate-800/90 hover:bg-slate-700 text-blue-300 border border-slate-700/80 font-medium text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-2 px-3 bg-slate-800/90 hover:bg-slate-700 text-indigo-300 border border-slate-700/80 font-medium text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
-              <Calendar className="w-3.5 h-3.5 text-blue-400" />
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
               <span>Google Calendar Reminders</span>
+            </button>
+          )}
+
+          {onOpenGoogleTasks && (
+            <button
+              onClick={() => {
+                onOpenGoogleTasks();
+                handleCloseSidebar();
+              }}
+              className="w-full py-2 px-3 bg-slate-800/90 hover:bg-slate-700 text-sky-300 border border-slate-700/80 font-medium text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <CheckSquare className="w-3.5 h-3.5 text-sky-400" />
+              <span>Google Tasks Sync</span>
             </button>
           )}
         </div>

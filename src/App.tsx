@@ -38,25 +38,8 @@ export default function App() {
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
 
   useEffect(() => {
-    let isInitialCheckDone = false;
     const unsubscribe = subscribeToTasks(
-      async (fetchedTasks) => {
-        if (!isInitialCheckDone) {
-          isInitialCheckDone = true;
-          if (fetchedTasks.length === 0) {
-            // Auto-populate ALL sample tasks into Firestore cloud database if empty
-            try {
-              await batchSaveTasksToDb(INITIAL_TASKS);
-              setToastNotification({
-                type: 'success',
-                message: `Added all ${INITIAL_TASKS.length} tasks into Firestore database!`
-              });
-              setTimeout(() => setToastNotification(null), 5000);
-            } catch (err) {
-              console.error('Error auto-seeding tasks into Firestore:', err);
-            }
-          }
-        }
+      (fetchedTasks) => {
         setTasks(syncTaskStatusesWithDates(fetchedTasks));
         setIsLoadingDb(false);
       },
@@ -402,12 +385,21 @@ export default function App() {
   };
 
   const handleClearAllData = async () => {
-    await clearAllTasksFromDb(tasks);
-    setToastNotification({
-      type: 'info',
-      message: 'All tasks deleted from database.'
-    });
-    setTimeout(() => setToastNotification(null), 4000);
+    try {
+      setIsLoadingDb(true);
+      await clearAllTasksFromDb(tasks);
+      setTasks([]);
+      setToastNotification({
+        type: 'info',
+        message: 'All dummy and custom tasks have been cleared from database.'
+      });
+      setTimeout(() => setToastNotification(null), 4000);
+    } catch (err: any) {
+      console.error('Error clearing tasks from database:', err);
+      setTasks([]);
+    } finally {
+      setIsLoadingDb(false);
+    }
   };
 
   const handleImportTasks = async (importedTasks: Task[]) => {
@@ -507,7 +499,12 @@ export default function App() {
 
       case 'REPORTS':
         return (
-          <ReportsView tasks={tasks} />
+          <ReportsView 
+            tasks={tasks}
+            onSelectTask={handleSelectTask}
+            onUpdateStatus={handleUpdateStatus}
+            onQuickAdd={() => handleQuickAdd()}
+          />
         );
 
       case 'TOP_PRIORITY':
@@ -547,6 +544,7 @@ export default function App() {
         onOpenGoogleTasks={() => setIsGoogleTasksOpen(true)}
         onQuickAdd={() => handleQuickAdd()}
         onResetData={handleResetSampleData}
+        onClearAllData={handleClearAllData}
         onAddAllToDb={handleAddAllToDatabase}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}

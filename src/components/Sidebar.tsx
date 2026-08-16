@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'HOME_WORKS' as ViewMode, label: 'Home Works', icon: Home, badge: null },
     { id: 'CALENDAR' as ViewMode, label: 'Calendar', icon: Calendar, badge: null },
     { id: 'KANBAN' as ViewMode, label: 'Kanban Board', icon: Kanban, badge: null },
-    { id: 'REPORTS' as ViewMode, label: 'Reports & Analytics', icon: BarChart3, badge: null },
+    { id: 'REPORTS' as ViewMode, label: 'Reports & Done Tasks', icon: BarChart3, badge: stats.completed > 0 ? stats.completed : null, badgeColor: 'bg-emerald-600 font-bold' },
   ];
 
   return (

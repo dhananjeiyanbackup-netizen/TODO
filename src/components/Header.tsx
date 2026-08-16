@@ -17,7 +17,8 @@ import {
   RotateCcw,
   Settings,
   CheckSquare,
-  Database
+  Database,
+  Trash2
 } from 'lucide-react';
 import { Task, NotificationItem } from '../types';
 
@@ -38,6 +39,7 @@ interface HeaderProps {
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onResetData?: () => void;
+  onClearAllData?: () => void;
   onAddAllToDb?: () => void;
   onSelectTask?: (task: Task) => void;
 }
@@ -59,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   isDarkMode = false,
   onToggleDarkMode = () => {},
   onResetData = () => {},
+  onClearAllData,
   onAddAllToDb,
   onSelectTask
 }) => {
@@ -185,12 +188,27 @@ export const Header: React.FC<HeaderProps> = ({
                     <Home className="w-4 h-4 text-teal-500" /> Home Work
                   </button>
                   {onAddAllToDb && (
-                    <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
+                    <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 space-y-1">
                       <button
                         onClick={() => { onAddAllToDb(); setShowQuickDropdown(false); }}
                         className="w-full text-left px-3 py-2 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 flex items-center gap-2 cursor-pointer font-bold"
                       >
                         <Database className="w-4 h-4 text-emerald-600" /> Add All into Database
+                      </button>
+                    </div>
+                  )}
+                  {onClearAllData && (
+                    <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
+                      <button
+                        onClick={() => {
+                          if (window.confirm('Clear all tasks and dummy data from your database? This will give you a fresh, clean slate.')) {
+                            onClearAllData();
+                            setShowQuickDropdown(false);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 flex items-center gap-2 cursor-pointer font-bold"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" /> Clear All Dummy Data
                       </button>
                     </div>
                   )}

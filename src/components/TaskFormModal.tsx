@@ -33,6 +33,7 @@ import {
 import { getTodayFormatted, generateTaskId } from '../utils/taskUtils';
 import { autoFixTaskToGoogleWorkspace, getCurrentGoogleAccount } from '../lib/googleSync';
 import { googleSignInForWorkspace } from '../lib/googleTasks';
+import { setCachedGoogleToken } from '../lib/googleAuthHelper';
 
 interface TaskFormModalProps {
   isOpen: boolean;
@@ -169,6 +170,8 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   const [googleUserEmail, setGoogleUserEmail] = useState<string | null>(null);
   const [isGoogleConnected, setIsGoogleConnected] = useState<boolean>(false);
   const [syncStatusBanner, setSyncStatusBanner] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [showManualTokenInput, setShowManualTokenInput] = useState<boolean>(false);
+  const [manualTokenVal, setManualTokenVal] = useState<string>('');
 
   useEffect(() => {
     const acc = getCurrentGoogleAccount();
@@ -184,6 +187,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   const handleConnectGoogleNow = async () => {
     try {
       setIsSyncingWorkspace(true);
+      setSyncStatusBanner(null);
       const res = await googleSignInForWorkspace();
       if (res) {
         setGoogleUserEmail(res.user.email || 'dhananjeiyan.backup@gmail.com');
@@ -194,13 +198,30 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
         });
       }
     } catch (err: any) {
+      const isPopupBlocked = err?.message?.toLowerCase().includes('popup');
       setSyncStatusBanner({
         type: 'error',
-        message: `Failed to authorize Google: ${err.message}`
+        message: isPopupBlocked 
+          ? 'Popup was blocked by your browser. Please allow popups for this site, or paste an OAuth token below.' 
+          : `Failed to authorize Google: ${err.message}`
       });
+      if (isPopupBlocked) {
+        setShowManualTokenInput(true);
+      }
     } finally {
       setIsSyncingWorkspace(false);
     }
+  };
+
+  const handleApplyManualToken = () => {
+    if (!manualTokenVal.trim()) return;
+    setCachedGoogleToken(manualTokenVal.trim(), googleUserEmail || 'dhananjeiyan.backup@gmail.com');
+    setIsGoogleConnected(true);
+    setShowManualTokenInput(false);
+    setSyncStatusBanner({
+      type: 'success',
+      message: 'Google Access Token configured successfully!'
+    });
   };
 
   useEffect(() => {
@@ -431,7 +452,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
         const syncRes = await autoFixTaskToGoogleWorkspace(taskToSave, {
           syncCalendar: autoSyncCalendar,
           syncTasks: autoSyncTasks,
-          requireAuthPrompt: true
+          requireAuthPrompt: false
         });
 
         if (syncRes.success) {
@@ -452,10 +473,10 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             timestamp: new Date().toLocaleString()
           });
         } else if (syncRes.error) {
-          console.warn('Google Workspace auto-sync note:', syncRes.error);
+          console.info('Google Workspace auto-sync info:', syncRes.error);
         }
       } catch (err: any) {
-        console.error('Error during auto-sync on create task:', err);
+        console.warn('Non-blocking note during auto-sync on create task:', err);
       }
     }
 
@@ -1185,14 +1206,49 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
             </div>
 
             {syncStatusBanner && (
-              <div className={`p-2 rounded-lg text-xs flex items-center gap-2 ${
+              <div className={`p-2 rounded-lg text-xs flex items-center justify-between gap-2 ${
                 syncStatusBanner.type === 'success' ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200' :
                 syncStatusBanner.type === 'error' ? 'bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200' :
                 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200'
               }`}>
-                {syncStatusBanner.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
-                {syncStatusBanner.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
-                <span>{syncStatusBanner.message}</span>
+                <div className="flex items-center gap-2">
+                  {syncStatusBanner.type === 'success' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />}
+                  {syncStatusBanner.type === 'error' && <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{syncStatusBanner.message}</span>
+                </div>
+                {!isGoogleConnected && (
+                  <button
+                    type="button"
+                    onClick={() => setShowManualTokenInput(!showManualTokenInput)}
+                    className="text-[11px] underline font-semibold text-slate-700 dark:text-slate-300 hover:text-indigo-600 cursor-pointer shrink-0"
+                  >
+                    {showManualTokenInput ? 'Hide' : 'Enter Token'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {showManualTokenInput && (
+              <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                  Paste Google OAuth Access Token (Bypasses Popup Blocker)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={manualTokenVal}
+                    onChange={(e) => setManualTokenVal(e.target.value)}
+                    placeholder="ya29.a0..."
+                    className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyManualToken}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    Save Token
+                  </button>
+                </div>
               </div>
             )}
 

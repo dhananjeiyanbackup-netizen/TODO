@@ -9,6 +9,7 @@ interface SettingsModalProps {
   onImportData: (tasks: Task[]) => void;
   onResetSampleData: () => void;
   onClearAllData?: () => void;
+  onAddAllToDb?: () => void;
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
 }
@@ -20,6 +21,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onImportData,
   onResetSampleData,
   onClearAllData,
+  onAddAllToDb,
   isDarkMode,
   onToggleDarkMode
 }) => {
@@ -120,6 +122,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
             </label>
           </div>
+
+          {/* Add All into Database (Batch Sync) */}
+          {onAddAllToDb && (
+            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2">
+              <div>
+                <span className="font-bold text-emerald-900 dark:text-emerald-200 block flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-emerald-600" />
+                  Add All Tasks into Database
+                </span>
+                <span className="text-emerald-700 dark:text-emerald-400 text-[11px]">
+                  Batch save and sync all comprehensive task datasets directly into your live Firestore cloud database.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  onAddAllToDb();
+                  onClose();
+                }}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Database className="w-4 h-4" /> Add All into Database Now
+              </button>
+            </div>
+          )}
 
           {/* Reset Sample Data */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">

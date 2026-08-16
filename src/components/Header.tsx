@@ -16,7 +16,8 @@ import {
   ChevronDown,
   RotateCcw,
   Settings,
-  CheckSquare
+  CheckSquare,
+  Database
 } from 'lucide-react';
 import { Task, NotificationItem } from '../types';
 
@@ -37,6 +38,7 @@ interface HeaderProps {
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onResetData?: () => void;
+  onAddAllToDb?: () => void;
   onSelectTask?: (task: Task) => void;
 }
 
@@ -57,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   isDarkMode = false,
   onToggleDarkMode = () => {},
   onResetData = () => {},
+  onAddAllToDb,
   onSelectTask
 }) => {
   const [showQuickDropdown, setShowQuickDropdown] = useState(false);
@@ -115,6 +118,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right Actions */}
         <div className="flex items-center gap-2">
           
+          {/* Add All to Database Action Button */}
+          {onAddAllToDb && (
+            <button
+              onClick={onAddAllToDb}
+              className="hidden md:flex items-center gap-1.5 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Add / Sync All Tasks to Cloud Firestore Database"
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>Add All into DB</span>
+            </button>
+          )}
+
           {/* Quick Action Dropdown */}
           <div className="relative">
             <button
@@ -169,6 +184,16 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     <Home className="w-4 h-4 text-teal-500" /> Home Work
                   </button>
+                  {onAddAllToDb && (
+                    <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
+                      <button
+                        onClick={() => { onAddAllToDb(); setShowQuickDropdown(false); }}
+                        className="w-full text-left px-3 py-2 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 flex items-center gap-2 cursor-pointer font-bold"
+                      >
+                        <Database className="w-4 h-4 text-emerald-600" /> Add All into Database
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}

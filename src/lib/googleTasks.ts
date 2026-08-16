@@ -1,19 +1,15 @@
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import { app } from './firebase';
 import { Task } from '../types';
+import { 
+  universalGoogleSignIn, 
+  getCachedGoogleToken, 
+  setCachedGoogleToken, 
+  universalGoogleSignOut, 
+  subscribeToGoogleAuth,
+  GoogleUserInfo,
+  WORKSPACE_SCOPES 
+} from './googleAuthHelper';
 
-export const WORKSPACE_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/tasks',
-  'https://www.googleapis.com/auth/tasks.readonly'
-];
-
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-WORKSPACE_SCOPES.forEach(scope => provider.addScope(scope));
-
-let isSigningIn = false;
-let cachedAccessToken: string | null = null;
+export { WORKSPACE_SCOPES };
 
 export interface GoogleTaskList {
   id: string;
@@ -41,55 +37,47 @@ export interface GoogleTask {
 
 // Unified Auth state listener
 export const initGoogleWorkspaceAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: { email: string | null; displayName?: string | null; photoURL?: string | null }, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
+  return subscribeToGoogleAuth((user, token) => {
+    if (token && user) {
+      if (onAuthSuccess) {
+        onAuthSuccess({
+          email: user.email,
+          displayName: user.name || user.email,
+          photoURL: user.photoURL || null
+        }, token);
       }
     } else {
-      cachedAccessToken = null;
       if (onAuthFailure) onAuthFailure();
     }
   });
 };
 
 // Sign in with Google with Calendar + Tasks scopes
-export const googleSignInForWorkspace = async (): Promise<{ user: User; accessToken: string } | null> => {
-  try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to obtain Google OAuth access token');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: any) {
-    console.error('Google Workspace Sign-In error:', error);
-    throw error;
-  } finally {
-    isSigningIn = false;
-  }
+export const googleSignInForWorkspace = async (): Promise<{ user: { email: string | null; displayName?: string | null; photoURL?: string | null }; accessToken: string } | null> => {
+  const result = await universalGoogleSignIn();
+  return {
+    user: {
+      email: result.user.email,
+      displayName: result.user.name || result.user.email,
+      photoURL: result.user.photoURL || null
+    },
+    accessToken: result.accessToken
+  };
 };
 
 export const getCachedWorkspaceToken = (): string | null => {
-  return cachedAccessToken;
+  return getCachedGoogleToken();
 };
 
-export const setCachedWorkspaceToken = (token: string | null) => {
-  cachedAccessToken = token;
+export const setCachedWorkspaceToken = (token: string | null, email?: string) => {
+  setCachedGoogleToken(token, email);
 };
 
 export const logoutGoogleWorkspace = async () => {
-  await auth.signOut();
-  cachedAccessToken = null;
+  await universalGoogleSignOut();
 };
 
 // Google Tasks API V1 Operations

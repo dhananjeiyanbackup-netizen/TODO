@@ -1,21 +1,13 @@
 import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  User 
-} from 'firebase/auth';
-import { app } from './firebase';
-import { WORKSPACE_SCOPES, setCachedWorkspaceToken } from './googleTasks';
+  universalGoogleSignIn, 
+  getCachedGoogleToken, 
+  setCachedGoogleToken, 
+  universalGoogleSignOut, 
+  subscribeToGoogleAuth,
+  WORKSPACE_SCOPES 
+} from './googleAuthHelper';
 
 export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-WORKSPACE_SCOPES.forEach(scope => provider.addScope(scope));
-
-let isSigningIn = false;
-let cachedAccessToken: string | null = null;
 
 export interface CalendarEvent {
   id?: string;
@@ -44,53 +36,41 @@ export interface CalendarEvent {
 
 // Initialize auth state listener
 export const initCalendarAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: { email: string | null; displayName?: string | null }, token: string) => void,
   onAuthFailure?: () => void
 ) => {
-  return onAuthStateChanged(auth, async (user: User | null) => {
-    if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        cachedAccessToken = null;
-        if (onAuthFailure) onAuthFailure();
+  return subscribeToGoogleAuth((user, token) => {
+    if (token && user) {
+      if (onAuthSuccess) {
+        onAuthSuccess({
+          email: user.email,
+          displayName: user.name || user.email
+        }, token);
       }
     } else {
-      cachedAccessToken = null;
       if (onAuthFailure) onAuthFailure();
     }
   });
 };
 
 // Sign in with Google to authorize Calendar access
-export const googleSignInForCalendar = async (): Promise<{ user: User; accessToken: string } | null> => {
-  try {
-    isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to obtain Google OAuth access token');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    setCachedWorkspaceToken(credential.accessToken);
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: any) {
-    console.error('Google Calendar Sign-In error:', error);
-    throw error;
-  } finally {
-    isSigningIn = false;
-  }
+export const googleSignInForCalendar = async (): Promise<{ user: { email: string | null; displayName?: string | null }; accessToken: string } | null> => {
+  const result = await universalGoogleSignIn();
+  return {
+    user: {
+      email: result.user.email,
+      displayName: result.user.name || result.user.email
+    },
+    accessToken: result.accessToken
+  };
 };
 
 export const getCachedAccessToken = (): string | null => {
-  return cachedAccessToken;
+  return getCachedGoogleToken();
 };
 
 export const logoutCalendar = async () => {
-  await auth.signOut();
-  cachedAccessToken = null;
-  setCachedWorkspaceToken(null);
+  await universalGoogleSignOut();
 };
 
 // Google Calendar API V3 Helpers

@@ -10,6 +10,7 @@ import {
 import {
   subscribeToTasks,
   saveTaskToDb,
+  batchSaveTasksToDb,
   deleteTaskFromDb,
   clearAllTasksFromDb
 } from './lib/firebase';
@@ -37,8 +38,25 @@ export default function App() {
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
 
   useEffect(() => {
+    let isInitialCheckDone = false;
     const unsubscribe = subscribeToTasks(
-      (fetchedTasks) => {
+      async (fetchedTasks) => {
+        if (!isInitialCheckDone) {
+          isInitialCheckDone = true;
+          if (fetchedTasks.length === 0) {
+            // Auto-populate ALL sample tasks into Firestore cloud database if empty
+            try {
+              await batchSaveTasksToDb(INITIAL_TASKS);
+              setToastNotification({
+                type: 'success',
+                message: `Added all ${INITIAL_TASKS.length} tasks into Firestore database!`
+              });
+              setTimeout(() => setToastNotification(null), 5000);
+            } catch (err) {
+              console.error('Error auto-seeding tasks into Firestore:', err);
+            }
+          }
+        }
         setTasks(syncTaskStatusesWithDates(fetchedTasks));
         setIsLoadingDb(false);
       },
@@ -351,24 +369,54 @@ export default function App() {
     }
   };
 
+  const handleAddAllToDatabase = async () => {
+    try {
+      setIsLoadingDb(true);
+      const count = await batchSaveTasksToDb(INITIAL_TASKS);
+      setToastNotification({
+        type: 'success',
+        message: `Successfully synchronized and saved all ${count} tasks to Firestore database!`
+      });
+      setTimeout(() => setToastNotification(null), 5000);
+    } catch (err: any) {
+      console.error('Error adding all tasks to database:', err);
+      setToastNotification({
+        type: 'info',
+        message: `Error adding tasks to database: ${err?.message || 'Check Firestore permissions'}`
+      });
+      setTimeout(() => setToastNotification(null), 5000);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  };
+
   const handleResetSampleData = async () => {
     // Clear current tasks and load sample dataset
     await clearAllTasksFromDb(tasks);
-    for (const sample of INITIAL_TASKS) {
-      await saveTaskToDb(sample);
-    }
+    await batchSaveTasksToDb(INITIAL_TASKS);
+    setToastNotification({
+      type: 'success',
+      message: 'Sample dataset successfully written to Firestore database!'
+    });
+    setTimeout(() => setToastNotification(null), 4000);
   };
 
   const handleClearAllData = async () => {
     await clearAllTasksFromDb(tasks);
+    setToastNotification({
+      type: 'info',
+      message: 'All tasks deleted from database.'
+    });
+    setTimeout(() => setToastNotification(null), 4000);
   };
 
   const handleImportTasks = async (importedTasks: Task[]) => {
-    for (const t of importedTasks) {
-      if (t && t.id) {
-        await saveTaskToDb(t);
-      }
-    }
+    await batchSaveTasksToDb(importedTasks);
+    setToastNotification({
+      type: 'success',
+      message: `Imported ${importedTasks.length} tasks into Firestore database!`
+    });
+    setTimeout(() => setToastNotification(null), 4000);
   };
 
   const handleQuickAdd = (categoryPreset?: string, dueDatePreset?: string) => {
@@ -498,6 +546,8 @@ export default function App() {
         onOpenGoogleCalendar={() => setIsGoogleCalendarOpen(true)}
         onOpenGoogleTasks={() => setIsGoogleTasksOpen(true)}
         onQuickAdd={() => handleQuickAdd()}
+        onResetData={handleResetSampleData}
+        onAddAllToDb={handleAddAllToDatabase}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         searchQuery={searchQuery}
@@ -592,6 +642,7 @@ export default function App() {
         onImportData={handleImportTasks}
         onResetSampleData={handleResetSampleData}
         onClearAllData={handleClearAllData}
+        onAddAllToDb={handleAddAllToDatabase}
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
       />

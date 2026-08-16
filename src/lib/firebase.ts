@@ -8,6 +8,7 @@ import {
   updateDoc, 
   deleteDoc, 
   onSnapshot,
+  writeBatch,
   query,
   orderBy
 } from 'firebase/firestore';
@@ -54,12 +55,51 @@ export const subscribeToTasks = (onUpdate: (tasks: Task[]) => void, onError?: (e
   );
 };
 
+export const fetchAllTasksOnce = async (): Promise<Task[]> => {
+  const tasksRef = collection(db, TASKS_COLLECTION);
+  const snapshot = await getDocs(tasksRef);
+  const tasks: Task[] = [];
+  snapshot.forEach((docSnap) => {
+    tasks.push({
+      id: docSnap.id,
+      ...docSnap.data()
+    } as Task);
+  });
+  return tasks;
+};
+
 export const saveTaskToDb = async (task: Task): Promise<void> => {
   if (!task.id) return;
   const taskRef = doc(db, TASKS_COLLECTION, task.id);
   // Clean undefined properties for Firestore
   const cleanTask = JSON.parse(JSON.stringify(task));
   await setDoc(taskRef, cleanTask, { merge: true });
+};
+
+export const batchSaveTasksToDb = async (tasks: Task[]): Promise<number> => {
+  if (!tasks || tasks.length === 0) return 0;
+  
+  // Firestore batch limit is 500 operations per batch
+  const BATCH_SIZE = 400;
+  let count = 0;
+  
+  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
+    const chunk = tasks.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    
+    for (const task of chunk) {
+      if (task && task.id) {
+        const taskRef = doc(db, TASKS_COLLECTION, task.id);
+        const cleanTask = JSON.parse(JSON.stringify(task));
+        batch.set(taskRef, cleanTask, { merge: true });
+        count++;
+      }
+    }
+    
+    await batch.commit();
+  }
+  
+  return count;
 };
 
 export const updateTaskInDb = async (taskId: string, updates: Partial<Task>): Promise<void> => {
@@ -75,10 +115,20 @@ export const deleteTaskFromDb = async (taskId: string): Promise<void> => {
   await deleteDoc(taskRef);
 };
 
-export const clearAllTasksFromDb = async (tasks: Task[]): Promise<void> => {
-  for (const t of tasks) {
-    if (t.id) {
-      await deleteTaskFromDb(t.id);
+export const clearAllTasksFromDb = async (tasks?: Task[]): Promise<void> => {
+  const tasksToDelete = tasks && tasks.length > 0 ? tasks : await fetchAllTasksOnce();
+  const BATCH_SIZE = 400;
+  
+  for (let i = 0; i < tasksToDelete.length; i += BATCH_SIZE) {
+    const chunk = tasksToDelete.slice(i, i + BATCH_SIZE);
+    const batch = writeBatch(db);
+    for (const t of chunk) {
+      if (t.id) {
+        const taskRef = doc(db, TASKS_COLLECTION, t.id);
+        batch.delete(taskRef);
+      }
     }
+    await batch.commit();
   }
 };
+

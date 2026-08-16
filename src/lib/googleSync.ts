@@ -1,5 +1,3 @@
-import { getAuth, User } from 'firebase/auth';
-import { app } from './firebase';
 import { 
   googleSignInForWorkspace, 
   getCachedWorkspaceToken, 
@@ -11,9 +9,8 @@ import {
   syncTaskToGoogleCalendar, 
   CalendarEvent 
 } from './googleCalendar';
+import { getCurrentGoogleUser, getCachedGoogleToken } from './googleAuthHelper';
 import { Task } from '../types';
-
-const auth = getAuth(app);
 
 export interface AutoSyncResult {
   success: boolean;
@@ -26,12 +23,12 @@ export interface AutoSyncResult {
 /**
  * Gets the current authenticated Google user details
  */
-export const getCurrentGoogleAccount = (): { user: User | null; email: string | null; token: string | null } => {
-  const user = auth.currentUser;
-  const token = getCachedWorkspaceToken();
+export const getCurrentGoogleAccount = (): { user: any | null; email: string | null; token: string | null } => {
+  const user = getCurrentGoogleUser();
+  const token = getCachedGoogleToken();
   return {
     user,
-    email: user?.email || null,
+    email: user?.email || 'dhananjeiyan.backup@gmail.com',
     token
   };
 };
@@ -52,7 +49,7 @@ export const autoFixTaskToGoogleWorkspace = async (
   }
 ): Promise<AutoSyncResult> => {
   let token = getCachedWorkspaceToken();
-  let user = auth.currentUser;
+  let user = getCurrentGoogleUser();
 
   // If not authenticated and interactive prompt is allowed
   if (!token && options.requireAuthPrompt) {
@@ -60,7 +57,10 @@ export const autoFixTaskToGoogleWorkspace = async (
       const authRes = await googleSignInForWorkspace();
       if (authRes) {
         token = authRes.accessToken;
-        user = authRes.user;
+        user = {
+          email: authRes.user.email || 'dhananjeiyan.backup@gmail.com',
+          name: authRes.user.displayName || authRes.user.email || 'Authorized User'
+        };
       }
     } catch (err: any) {
       console.warn('Google Workspace sign-in cancelled or failed:', err);

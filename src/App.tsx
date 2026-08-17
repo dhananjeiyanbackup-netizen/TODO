@@ -5,7 +5,8 @@ import { INITIAL_TASKS } from './data/initialTasks';
 import { 
   syncTaskStatusesWithDates, 
   generateNotifications, 
-  getTodayFormatted 
+  getTodayFormatted,
+  generateTaskId
 } from './utils/taskUtils';
 import {
   subscribeToTasks,
@@ -134,8 +135,15 @@ export default function App() {
         setTimeout(() => setToastNotification(null), 5000);
       }
     } else {
-      // Create new task
-      const newId = taskData.id || `TSK-${String(Date.now()).slice(-5)}`;
+      // Create new task with guaranteed unique ID to prevent overwriting existing tasks
+      let newId = taskData.id;
+      if (!newId || tasks.some(t => t.id === newId)) {
+        newId = generateTaskId(tasks);
+      }
+      while (tasks.some(t => t.id === newId)) {
+        newId = generateTaskId([...tasks, { id: newId } as Task]);
+      }
+
       const newTask: Task = {
         id: newId,
         title: taskData.title || 'Untitled Task',
@@ -196,7 +204,7 @@ export default function App() {
   };
 
   const handleDuplicateTask = async (task: Task) => {
-    const newId = `TSK-${String(Date.now()).slice(-5)}`;
+    const newId = generateTaskId(tasks);
     const duplicated: Task = {
       ...task,
       id: newId,
@@ -597,9 +605,15 @@ export default function App() {
       {/* Task Creation / Editing Modal */}
       <TaskFormModal
         isOpen={isFormModalOpen}
-        onClose={() => { setIsFormModalOpen(false); setEditingTask(null); }}
+        onClose={() => { 
+          setIsFormModalOpen(false); 
+          setEditingTask(null);
+          setFormCategoryPreset(undefined);
+          setFormDueDatePreset(undefined);
+        }}
         onSave={handleSaveTask}
         editingTask={editingTask}
+        tasks={tasks}
         categoryPreset={formCategoryPreset}
         defaultDueDate={formDueDatePreset}
       />

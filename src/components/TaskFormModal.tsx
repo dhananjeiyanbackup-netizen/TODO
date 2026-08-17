@@ -337,7 +337,7 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       setNotesList([]);
       setRecurrence('NONE');
     }
-  }, [existingTask, isOpen, presetCategory]);
+  }, [currentTask, isOpen, currentPreset, defaultDueDate, allTasksList]);
 
   const handleCategoryChange = (newCat: MainCategory) => {
     setCategory(newCat);

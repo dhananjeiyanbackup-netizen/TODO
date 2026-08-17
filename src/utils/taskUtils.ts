@@ -19,15 +19,28 @@ export const getTomorrowFormatted = (): string => {
 
 export const generateTaskId = (existingTasks: Task[] = []): string => {
   let maxNum = 1000;
+  const existingIds = new Set<string>();
+
   (existingTasks || []).forEach(task => {
     if (!task || !task.id) return;
-    const match = task.id.match(/TASK-(\d+)/) || task.id.match(/TSK-(\d+)/);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > maxNum) maxNum = num;
+    existingIds.add(task.id);
+    const matches = task.id.match(/\d+/g);
+    if (matches) {
+      matches.forEach(m => {
+        const num = parseInt(m, 10);
+        if (!isNaN(num) && num > maxNum && num < 10000000) {
+          maxNum = num;
+        }
+      });
     }
   });
-  return `TASK-${maxNum + 1}`;
+
+  let nextCandidate = `TASK-${maxNum + 1}`;
+  while (existingIds.has(nextCandidate)) {
+    maxNum++;
+    nextCandidate = `TASK-${maxNum + 1}`;
+  }
+  return nextCandidate;
 };
 
 // Automatic Overdue Evaluator

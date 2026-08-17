@@ -43,6 +43,7 @@ import {
 } from 'recharts';
 import { Task, TaskStatus, Priority, MainCategory } from '../types';
 import { calculateDashboardStats, getTodayFormatted } from '../utils/taskUtils';
+import { CategoryProductivityProgress } from './CategoryProductivityProgress';
 
 interface ReportsViewProps {
   tasks?: Task[];
@@ -75,6 +76,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const [sortBy, setSortBy] = useState<'DATE_DESC' | 'DATE_ASC' | 'PRIORITY_DESC' | 'TITLE_ASC' | 'HOURS_DESC'>('DATE_DESC');
   const [viewMode, setViewMode] = useState<ViewModeType>('TABLE');
   const [copiedSummary, setCopiedSummary] = useState(false);
+  const [showCategoryProgressInDone, setShowCategoryProgressInDone] = useState<boolean>(true);
 
   const today = getTodayFormatted();
 
@@ -383,6 +385,18 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('CATEGORY_KPIS')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'CATEGORY_KPIS'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Category Productivity</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('ANALYTICS_CHARTS')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'ANALYTICS_CHARTS'
@@ -392,18 +406,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Visual Charts</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('CATEGORY_KPIS')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'CATEGORY_KPIS'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Department Matrix</span>
           </button>
         </div>
       </div>
@@ -495,6 +497,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       {activeTab === 'DONE_TASKS' && (
         <div className="space-y-6">
           
+          {/* Collapsible Category Productivity Progress Widget */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
+                Category Productivity Overview
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCategoryProgressInDone(!showCategoryProgressInDone)}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer flex items-center gap-1"
+              >
+                {showCategoryProgressInDone ? 'Hide Progress Bars' : 'Show Progress Bars'}
+              </button>
+            </div>
+            {showCategoryProgressInDone && (
+              <CategoryProductivityProgress 
+                tasks={safeTasks}
+                onSelectCategory={(catId) => {
+                  setSelectedCategoryFilter(catId);
+                }}
+              />
+            )}
+          </div>
+
           {/* Controls Bar: Filters, Date Range, Search & Export */}
           <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 p-4 rounded-2xl shadow-xs space-y-3.5">
             
@@ -1048,16 +1075,27 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       {/* SUB-VIEW 3: CATEGORY & DEPARTMENT KPI MATRIX TABLE      */}
       {/* ======================================================== */}
       {activeTab === 'CATEGORY_KPIS' && (
-        <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-xs overflow-hidden space-y-4 p-5">
-          <div>
-            <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-600" />
-              Category & Stream Completion Performance Matrix
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Comparative completion percentages, active workloads, and execution progress across every functional department.
-            </p>
-          </div>
+        <div className="space-y-6">
+          {/* Main Visual Category Productivity Progress Bars */}
+          <CategoryProductivityProgress 
+            tasks={safeTasks}
+            onSelectCategory={(catId) => {
+              setSelectedCategoryFilter(catId);
+              setActiveTab('DONE_TASKS');
+            }}
+          />
+
+          {/* Department Breakdown Matrix */}
+          <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-xs overflow-hidden space-y-4 p-5">
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-600" />
+                Category & Stream Completion Performance Matrix
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Comparative completion percentages, active workloads, and execution progress across every functional department.
+              </p>
+            </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -1107,8 +1145,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             </table>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-    </div>
-  );
+  </div>
+);
 };

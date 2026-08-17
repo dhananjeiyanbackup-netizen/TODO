@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2, X, AlertCircle } from 'lucide-react';
 import { Task, ViewMode, MainCategory, TaskStatus, Attachment } from './types';
 import { INITIAL_TASKS } from './data/initialTasks';
 import { 
@@ -34,15 +34,56 @@ import { GoogleCalendarModal } from './components/GoogleCalendarModal';
 import { GoogleTasksModal } from './components/GoogleTasksModal';
 
 export default function App() {
-  // 1. Live Task State connected to Firestore Database
-  const [tasks, setTasks] = useState<Task[]>([]);
+  // 1. Live Task State connected to Firestore Database + Local Cache for instant refresh resilience
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    try {
+      const cached = localStorage.getItem('exec_portal_tasks_v1');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return syncTaskStatusesWithDates(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading from localStorage cache:', e);
+    }
+    return INITIAL_TASKS;
+  });
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
+
+  // Sync to localStorage whenever tasks state updates
+  useEffect(() => {
+    try {
+      if (tasks && tasks.length > 0) {
+        localStorage.setItem('exec_portal_tasks_v1', JSON.stringify(tasks));
+      }
+    } catch (e) {
+      console.warn('Failed to cache tasks in localStorage:', e);
+    }
+  }, [tasks]);
 
   useEffect(() => {
     const unsubscribe = subscribeToTasks(
-      (fetchedTasks) => {
-        setTasks(syncTaskStatusesWithDates(fetchedTasks));
+      async (fetchedTasks) => {
         setIsLoadingDb(false);
+        if (fetchedTasks && fetchedTasks.length > 0) {
+          const synced = syncTaskStatusesWithDates(fetchedTasks);
+          setTasks(synced);
+          try {
+            localStorage.setItem('exec_portal_tasks_v1', JSON.stringify(synced));
+          } catch (e) {}
+        } else {
+          // If Firestore is empty on first launch, auto-persist the default dataset
+          try {
+            const cached = localStorage.getItem('exec_portal_tasks_v1');
+            const dataToSeed: Task[] = (cached && JSON.parse(cached)?.length > 0)
+              ? JSON.parse(cached)
+              : INITIAL_TASKS;
+            await batchSaveTasksToDb(dataToSeed);
+          } catch (err) {
+            console.error('Auto-seed to Firestore failed:', err);
+          }
+        }
       },
       (err) => {
         console.error('Firestore subscription error:', err);
@@ -86,7 +127,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isGoogleCalendarOpen, setIsGoogleCalendarOpen] = useState<boolean>(false);
   const [isGoogleTasksOpen, setIsGoogleTasksOpen] = useState<boolean>(false);
-  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
+  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // Notifications calculation
   const notifications = generateNotifications(tasks);
@@ -125,7 +166,21 @@ export default function App() {
           ...(editingTask.activityLogs || [])
         ]
       };
-      await saveTaskToDb(updated);
+      try {
+        await saveTaskToDb(updated);
+        setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+        setToastNotification({
+          type: 'success',
+          message: `Task "${updated.title}" (${updated.id}) updated and saved to database!`
+        });
+        setTimeout(() => setToastNotification(null), 4000);
+      } catch (err: any) {
+        console.error('Error saving updated task to Firestore:', err);
+        setToastNotification({
+          type: 'error' as any,
+          message: `Failed to update database: ${err.message || 'Unknown error'}`
+        });
+      }
 
       if (taskData.googleSyncEmail || taskData.googleCalendarEventId || taskData.googleTaskId) {
         setToastNotification({
@@ -152,10 +207,10 @@ export default function App() {
         subcategory: taskData.subcategory || 'General',
         priority: taskData.priority || 'MEDIUM',
         status: taskData.status || 'NEW',
-        startDate: taskData.startDate || getTodayFormatted(),
-        dueDate: taskData.dueDate || getTodayFormatted(),
-        reminderDate: taskData.reminderDate || '',
-        assignedTo: taskData.assignedTo || 'Unassigned',
+        startDate: taskData.startDate || undefined,
+        dueDate: taskData.dueDate || '',
+        reminderDate: taskData.reminderDate || undefined,
+        assignedTo: taskData.assignedTo || '',
         relatedOrganization: taskData.relatedOrganization || '',
         estimatedTimeHours: taskData.estimatedTimeHours || 1,
         createdDate: taskData.createdDate || getTodayFormatted(),
@@ -180,7 +235,24 @@ export default function App() {
         googleSyncEmail: taskData.googleSyncEmail
       };
 
-      await saveTaskToDb(newTask);
+      try {
+        await saveTaskToDb(newTask);
+        setTasks(prev => {
+          const filtered = prev.filter(t => t.id !== newTask.id);
+          return [newTask, ...filtered];
+        });
+        setToastNotification({
+          type: 'success',
+          message: `Task "${newTask.title}" (${newTask.id}) created and saved to database!`
+        });
+        setTimeout(() => setToastNotification(null), 4000);
+      } catch (err: any) {
+        console.error('Error saving new task to Firestore:', err);
+        setToastNotification({
+          type: 'error' as any,
+          message: `Failed to save new task to database: ${err.message || 'Unknown error'}`
+        });
+      }
 
       if (taskData.googleSyncEmail || taskData.googleCalendarEventId || taskData.googleTaskId) {
         setToastNotification({
@@ -196,15 +268,29 @@ export default function App() {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    await deleteTaskFromDb(taskId);
+    setTasks(prev => prev.filter(t => t.id !== taskId));
     if (selectedTask?.id === taskId) {
       setSelectedTask(null);
       setIsDetailModalOpen(false);
     }
+    try {
+      await deleteTaskFromDb(taskId);
+      setToastNotification({
+        type: 'info',
+        message: `Task ${taskId} removed from database.`
+      });
+      setTimeout(() => setToastNotification(null), 3000);
+    } catch (err: any) {
+      console.error('Error deleting task from Firestore:', err);
+    }
   };
 
   const handleDuplicateTask = async (task: Task) => {
-    const newId = generateTaskId(tasks);
+    let newId = generateTaskId(tasks);
+    while (tasks.some(t => t.id === newId)) {
+      newId = generateTaskId([...tasks, { id: newId } as Task]);
+    }
+
     const duplicated: Task = {
       ...task,
       id: newId,
@@ -220,7 +306,18 @@ export default function App() {
         }
       ]
     };
-    await saveTaskToDb(duplicated);
+
+    setTasks(prev => [duplicated, ...prev]);
+    try {
+      await saveTaskToDb(duplicated);
+      setToastNotification({
+        type: 'success',
+        message: `Task duplicated as ${duplicated.id} and saved to database.`
+      });
+      setTimeout(() => setToastNotification(null), 3000);
+    } catch (err: any) {
+      console.error('Error saving duplicated task to Firestore:', err);
+    }
   };
 
   const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
@@ -230,7 +327,7 @@ export default function App() {
     const updated: Task = {
       ...existing,
       status: newStatus,
-      completionDate: newStatus === 'COMPLETED' ? getTodayFormatted() : existing.completionDate,
+      completionDate: newStatus === 'COMPLETED' ? getTodayFormatted() : undefined,
       activityLogs: [
         {
           id: `act_${Date.now()}`,
@@ -242,10 +339,15 @@ export default function App() {
       ]
     };
 
-    await saveTaskToDb(updated);
-
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask(updated);
+    }
+
+    try {
+      await saveTaskToDb(updated);
+    } catch (err: any) {
+      console.error('Error updating task status in Firestore:', err);
     }
   };
 
@@ -268,10 +370,15 @@ export default function App() {
       ]
     };
 
-    await saveTaskToDb(updated);
-
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask(updated);
+    }
+
+    try {
+      await saveTaskToDb(updated);
+    } catch (err: any) {
+      console.error('Error saving note in Firestore:', err);
     }
   };
 
@@ -300,10 +407,15 @@ export default function App() {
       ]
     };
 
-    await saveTaskToDb(updated);
-
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask(updated);
+    }
+
+    try {
+      await saveTaskToDb(updated);
+    } catch (err: any) {
+      console.error('Error saving follow-up in Firestore:', err);
     }
   };
 
@@ -326,10 +438,15 @@ export default function App() {
       ]
     };
 
-    await saveTaskToDb(updated);
-
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask(updated);
+    }
+
+    try {
+      await saveTaskToDb(updated);
+    } catch (err: any) {
+      console.error('Error saving attachment in Firestore:', err);
     }
   };
 
@@ -353,17 +470,22 @@ export default function App() {
       ]
     };
 
-    await saveTaskToDb(updated);
-
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
     if (selectedTask && selectedTask.id === taskId) {
       setSelectedTask(updated);
+    }
+
+    try {
+      await saveTaskToDb(updated);
+    } catch (err: any) {
+      console.error('Error deleting attachment in Firestore:', err);
     }
   };
 
   const handleAddAllToDatabase = async () => {
     try {
       setIsLoadingDb(true);
-      const count = await batchSaveTasksToDb(INITIAL_TASKS);
+      const count = await batchSaveTasksToDb(tasks.length > 0 ? tasks : INITIAL_TASKS);
       setToastNotification({
         type: 'success',
         message: `Successfully synchronized and saved all ${count} tasks to Firestore database!`
@@ -372,7 +494,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Error adding all tasks to database:', err);
       setToastNotification({
-        type: 'info',
+        type: 'error',
         message: `Error adding tasks to database: ${err?.message || 'Check Firestore permissions'}`
       });
       setTimeout(() => setToastNotification(null), 5000);
@@ -382,14 +504,22 @@ export default function App() {
   };
 
   const handleResetSampleData = async () => {
-    // Clear current tasks and load sample dataset
-    await clearAllTasksFromDb(tasks);
-    await batchSaveTasksToDb(INITIAL_TASKS);
-    setToastNotification({
-      type: 'success',
-      message: 'Sample dataset successfully written to Firestore database!'
-    });
-    setTimeout(() => setToastNotification(null), 4000);
+    try {
+      setIsLoadingDb(true);
+      await clearAllTasksFromDb(tasks);
+      await batchSaveTasksToDb(INITIAL_TASKS);
+      setTasks(INITIAL_TASKS);
+      localStorage.setItem('exec_portal_tasks_v1', JSON.stringify(INITIAL_TASKS));
+      setToastNotification({
+        type: 'success',
+        message: 'Sample dataset successfully written to Firestore database!'
+      });
+      setTimeout(() => setToastNotification(null), 4000);
+    } catch (err: any) {
+      console.error('Error resetting sample data:', err);
+    } finally {
+      setIsLoadingDb(false);
+    }
   };
 
   const handleClearAllData = async () => {
@@ -397,20 +527,23 @@ export default function App() {
       setIsLoadingDb(true);
       await clearAllTasksFromDb(tasks);
       setTasks([]);
+      localStorage.removeItem('exec_portal_tasks_v1');
       setToastNotification({
         type: 'info',
-        message: 'All dummy and custom tasks have been cleared from database.'
+        message: 'All tasks have been cleared from database.'
       });
       setTimeout(() => setToastNotification(null), 4000);
     } catch (err: any) {
       console.error('Error clearing tasks from database:', err);
       setTasks([]);
+      localStorage.removeItem('exec_portal_tasks_v1');
     } finally {
       setIsLoadingDb(false);
     }
   };
 
   const handleImportTasks = async (importedTasks: Task[]) => {
+    setTasks(prev => [...importedTasks, ...prev]);
     await batchSaveTasksToDb(importedTasks);
     setToastNotification({
       type: 'success',
@@ -564,14 +697,24 @@ export default function App() {
 
       {/* Floating Auto-Sync Notification Banner */}
       {toastNotification && (
-        <div className="fixed top-16 right-4 z-50 max-w-md bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-emerald-400">
-          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-200" />
+        <div className={`fixed top-16 right-4 z-50 max-w-md ${
+          toastNotification.type === 'error'
+            ? 'bg-rose-600 border-rose-400'
+            : toastNotification.type === 'info'
+            ? 'bg-indigo-600 border-indigo-400'
+            : 'bg-emerald-600 border-emerald-400'
+        } text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border`}>
+          {toastNotification.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-200" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-200" />
+          )}
           <p className="text-xs font-semibold leading-relaxed flex-1">
             {toastNotification.message}
           </p>
           <button
             onClick={() => setToastNotification(null)}
-            className="p-1 hover:bg-emerald-700/80 rounded-lg cursor-pointer"
+            className="p-1 hover:bg-black/20 rounded-lg cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

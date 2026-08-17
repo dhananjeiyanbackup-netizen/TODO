@@ -19,7 +19,10 @@ import {
   Sparkles,
   Loader2,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  Mic,
+  MicOff,
+  Volume2
 } from 'lucide-react';
 import { 
   Task, 
@@ -30,7 +33,7 @@ import {
   RecurrencePattern,
   InnovationLevel
 } from '../types';
-import { getTodayFormatted, generateTaskId } from '../utils/taskUtils';
+import { getTodayFormatted, getTomorrowFormatted, getDateOffsetFormatted, generateTaskId } from '../utils/taskUtils';
 import { autoFixTaskToGoogleWorkspace, getCurrentGoogleAccount } from '../lib/googleSync';
 import { googleSignInForWorkspace } from '../lib/googleTasks';
 import { setCachedGoogleToken } from '../lib/googleAuthHelper';
@@ -173,6 +176,148 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
   const [showManualTokenInput, setShowManualTokenInput] = useState<boolean>(false);
   const [manualTokenVal, setManualTokenVal] = useState<string>('');
 
+  // Web Speech API Voice-to-Text Dictation States
+  const [isListeningTitle, setIsListeningTitle] = useState<boolean>(false);
+  const [isListeningDesc, setIsListeningDesc] = useState<boolean>(false);
+  const [interimTranscript, setInterimTranscript] = useState<string>('');
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const recognitionRef = React.useRef<any>(null);
+
+  const isSpeechSupported = typeof window !== 'undefined' && 
+    ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+
+  // Stop active speech recognition and clean up
+  const stopDictation = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+    setIsListeningTitle(false);
+    setIsListeningDesc(false);
+    setInterimTranscript('');
+  };
+
+  const startDictation = (targetField: 'title' | 'description') => {
+    if (!isSpeechSupported) {
+      setSpeechError('Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      setTimeout(() => setSpeechError(null), 5000);
+      return;
+    }
+
+    // Stop any existing session first
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    setSpeechError(null);
+    setInterimTranscript('');
+
+    try {
+      const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognitionClass();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      if (targetField === 'title') {
+        setIsListeningTitle(true);
+        setIsListeningDesc(false);
+      } else {
+        setIsListeningDesc(true);
+        setIsListeningTitle(false);
+      }
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        let finalTrans = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const item = event.results[i];
+          if (item.isFinal) {
+            finalTrans += item[0].transcript;
+          } else {
+            interim += item[0].transcript;
+          }
+        }
+
+        setInterimTranscript(interim || finalTrans);
+
+        if (finalTrans) {
+          const cleanText = finalTrans.trim();
+          if (targetField === 'title') {
+            setTitle(prev => {
+              const current = prev.trim();
+              if (!current) {
+                return cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
+              }
+              return `${current} ${cleanText}`;
+            });
+          } else {
+            setDescription(prev => {
+              const current = prev.trim();
+              if (!current) {
+                return cleanText;
+              }
+              return `${current} ${cleanText}`;
+            });
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error event:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          setSpeechError('Microphone permission was blocked. Please allow microphone access in your browser bar.');
+        } else if (event.error === 'no-speech') {
+          // Quietly finish without error banner
+        } else {
+          setSpeechError(`Voice input error: ${event.error}`);
+        }
+        setIsListeningTitle(false);
+        setIsListeningDesc(false);
+        setInterimTranscript('');
+        setTimeout(() => setSpeechError(null), 5000);
+      };
+
+      recognition.onend = () => {
+        setIsListeningTitle(false);
+        setIsListeningDesc(false);
+        setInterimTranscript('');
+        recognitionRef.current = null;
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Failed to initialize speech recognition:', err);
+      setSpeechError('Could not start microphone dictation.');
+      setIsListeningTitle(false);
+      setIsListeningDesc(false);
+    }
+  };
+
+  // Ensure recognition stops on modal close or unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      stopDictation();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const acc = getCurrentGoogleAccount();
     if (acc.user?.email || acc.token) {
@@ -295,13 +440,13 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
       setStatus('NEW');
       setAssignedTo('');
       setCreatedDate(today);
-      setStartDate(defaultDueDate || today);
-      setDueDate(defaultDueDate || today);
+      setStartDate('');
+      setDueDate(defaultDueDate || '');
       setReminderDate('');
-      setEstimatedTimeHours(2);
+      setEstimatedTimeHours(1);
       setActualTimeHours(0);
       setFollowUpRequired(initialCat === 'FOLLOW_UPS');
-      setFollowUpDate(today);
+      setFollowUpDate('');
       setPersonName('');
       setDepartmentOrOrg('');
       setContactType('Phone');
@@ -514,20 +659,82 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
         {/* Modal Body Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-xs sm:text-sm">
           
+          {/* Voice Dictation Speech Notification / Error Banner */}
+          {speechError && (
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center justify-between gap-2 text-xs text-rose-700 dark:text-rose-300">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{speechError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSpeechError(null)}
+                className="text-rose-500 hover:text-rose-700 font-bold px-2 py-0.5 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {/* Title & Priority */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-3">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Task Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Prepare Question Paper for CIAT II"
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Task Title *
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => isListeningTitle ? stopDictation() : startDictation('title')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      isListeningTitle
+                        ? 'bg-rose-500 text-white shadow-xs animate-pulse ring-2 ring-rose-300 dark:ring-rose-800'
+                        : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
+                    }`}
+                    title={isListeningTitle ? 'Stop listening' : 'Dictate task title with Web Speech API'}
+                  >
+                    {isListeningTitle ? (
+                      <>
+                        <MicOff className="w-3.5 h-3.5" />
+                        <span>Stop Listening</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Voice Dictate</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Prepare Question Paper for CIAT II"
+                  className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border ${
+                    isListeningTitle 
+                      ? 'border-rose-400 dark:border-rose-500 ring-2 ring-rose-200 dark:ring-rose-950' 
+                      : 'border-slate-300 dark:border-slate-700'
+                  } rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium`}
+                />
+              </div>
+
+              {/* Real-time speech transcript feedback for Title */}
+              {isListeningTitle && (
+                <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 animate-in fade-in duration-200">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                  <span className="font-semibold shrink-0">Listening:</span>
+                  <span className="italic truncate">{interimTranscript || 'Speak now...'}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -549,16 +756,59 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Detailed Description
-            </label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter comprehensive details, requirements, instructions..."
-              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Detailed Description
+              </label>
+              <button
+                type="button"
+                onClick={() => isListeningDesc ? stopDictation() : startDictation('description')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  isListeningDesc
+                    ? 'bg-rose-500 text-white shadow-xs animate-pulse ring-2 ring-rose-300 dark:ring-rose-800'
+                    : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200/60 dark:border-indigo-800/60'
+                }`}
+                title={isListeningDesc ? 'Stop listening' : 'Dictate description with Web Speech API'}
+              >
+                {isListeningDesc ? (
+                  <>
+                    <MicOff className="w-3.5 h-3.5" />
+                    <span>Stop Listening</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Voice Dictate</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="relative">
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Enter comprehensive details, requirements, instructions... or click Voice Dictate to speak"
+                className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border ${
+                  isListeningDesc 
+                    ? 'border-rose-400 dark:border-rose-500 ring-2 ring-rose-200 dark:ring-rose-950' 
+                    : 'border-slate-300 dark:border-slate-700'
+                } rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500`}
+              />
+            </div>
+
+            {/* Real-time speech transcript feedback for Description */}
+            {isListeningDesc && (
+              <div className="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300 animate-in fade-in duration-200">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+                <span className="font-semibold shrink-0">Listening:</span>
+                <span className="italic truncate">{interimTranscript || 'Speak now...'}</span>
+              </div>
+            )}
           </div>
 
           {/* Category, Subcategory, Status, Recurrence */}
@@ -637,21 +887,52 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
           {/* Dates & Time Estimation */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Start Date
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Start Date
+                </label>
+                {startDate && (
+                  <button
+                    type="button"
+                    onClick={() => setStartDate('')}
+                    className="text-[10px] text-slate-400 hover:text-red-500 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs"
               />
+              <div className="flex gap-1 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setStartDate(today)}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  Today
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Due Date *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Due Date *
+                </label>
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => setDueDate('')}
+                    className="text-[10px] text-slate-400 hover:text-red-500 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <input
                 type="date"
                 required
@@ -659,18 +940,61 @@ export const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400"
               />
+              <div className="flex flex-wrap gap-1 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today)}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(getTomorrowFormatted())}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(getDateOffsetFormatted(7))}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  +7d
+                </button>
+              </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Reminder Date
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Reminder Date
+                </label>
+                {reminderDate && (
+                  <button
+                    type="button"
+                    onClick={() => setReminderDate('')}
+                    className="text-[10px] text-slate-400 hover:text-red-500 cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <input
                 type="date"
                 value={reminderDate}
                 onChange={(e) => setReminderDate(e.target.value)}
                 className="w-full px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs"
               />
+              <div className="flex gap-1 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setReminderDate(today)}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  Today
+                </button>
+              </div>
             </div>
 
             <div>
